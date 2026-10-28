@@ -221,45 +221,53 @@ button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
   <!-- ABA 1: ROTA & DESTINO (Digitar Endereços e Integrar ao Waze/Maps) -->
   <div class="tab-content" id="tabRoute">
     <div class="panel-header">
-      <div class="panel-title">📍 Traçar Rota & Endereços</div>
+      <div class="panel-title">📍 Para Onde Você Vai?</div>
       <button class="close-btn" onclick="switchTab(null)">✕</button>
     </div>
 
-    <!-- Ponto Inicial -->
+    <!-- Ponto Inicial com detecção automática -->
     <div class="field">
       <label>
-        <span>Ponto Inicial / Origem</span>
-        <a href="javascript:void(0)" id="useMyLoc" style="color:var(--blue);text-decoration:none">📍 Usar meu GPS</a>
+        <span>Origem (Partida)</span>
+        <span style="color:var(--ok);font-size:11px">● GPS Automático</span>
       </label>
       <div class="input-with-action">
-        <input id="addrOrigin" type="text" placeholder="Ex: Av. Paulista, 1000 - SP" autocomplete="off">
-        <button class="btn-icon" id="searchOriginBtn" title="Buscar Origem">🔍</button>
+        <input id="addrOrigin" type="text" placeholder="Detectando sua localização..." value="📍 Minha Localização Atual">
+        <button class="btn-icon" id="searchOriginBtn" title="Buscar outra origem">🔍</button>
       </div>
       <div class="suggestions" id="originSuggestions"></div>
     </div>
 
     <!-- Endereço Onde Vou (Destino) -->
     <div class="field">
-      <label><span>Endereço Onde Vou (Destino)</span></label>
+      <label><span>Endereço de Destino</span></label>
       <div class="input-with-action">
-        <input id="addrDest" type="text" placeholder="Ex: Rodovia dos Imigrantes km 20" autocomplete="off">
+        <input id="addrDest" type="text" placeholder="Digite endereço, rodovia ou local..." autocomplete="off">
         <button class="btn-icon" id="searchDestBtn" title="Buscar Destino">🔍</button>
       </div>
       <div class="suggestions" id="destSuggestions"></div>
     </div>
 
-    <button class="btn-primary" id="btnCalculateRoute">
-      <span>🚗 Traçar Trajeto no Mapa</span>
-    </button>
+    <!-- Botões Grandes de Navegação Imediata -->
+    <div style="margin-top:10px">
+      <div style="font-size:11.5px;font-weight:700;text-transform:uppercase;color:var(--mut);margin-bottom:8px">
+        Iniciar com RadarFlow e Alertas Ativos:
+      </div>
+      <div class="quick-nav" style="margin-top:0">
+        <button class="btn-waze" id="btnNavWaze">🚙 Iniciar no Waze</button>
+        <button class="btn-maps" id="btnNavMaps">🗺️ Google Maps</button>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+      <button class="btn-primary" id="btnCalculateRoute" style="background:var(--card-sub);border:1px solid var(--line);font-size:13.5px">
+        <span>🚗 Apenas Simular Trajeto no Mapa</span>
+      </button>
+    </div>
 
     <div id="routeInfo" style="margin-top:10px;font-size:13px;color:var(--mut);display:none">
       <b style="color:var(--ink)" id="routeDistTime">—</b>
       <div id="routeRadarsAlert" style="margin-top:4px;color:var(--sign)"></div>
-    </div>
-
-    <div class="quick-nav">
-      <button class="btn-waze" id="btnNavWaze">🚙 Iniciar no Waze</button>
-      <button class="btn-maps" id="btnNavMaps">🗺️ Google Maps</button>
     </div>
   </div>
 
@@ -500,7 +508,7 @@ $('btnCalculateRoute').onclick = async () => {
     return;
   }
   const btn = $('btnCalculateRoute');
-  btn.textContent = 'Calculando melhor trajeto...';
+  btn.textContent = 'Calculando trajeto...';
   try {
     const url = `https://router.project-osrm.org/route/v1/driving/${originCoords[1]},${originCoords[0]};${destCoords[1]},${destCoords[0]}?overview=full&geometries=geojson`;
     const res = await fetch(url);
@@ -517,7 +525,6 @@ $('btnCalculateRoute').onclick = async () => {
       $('routeInfo').style.display = 'block';
       $('routeDistTime').textContent = `Trajeto: ${distKm} km · Aproximadamente ${timeMin} min`;
 
-      // Verificar se há trechos de radar cadastrados ao longo da rota
       let radarsOnRoute = 0;
       T.forEach(radar => {
         const near = coords.some(pt => hav(pt, radar.A) < 250);
@@ -527,29 +534,57 @@ $('btnCalculateRoute').onclick = async () => {
         ? `⚠️ Atenção: ${radarsOnRoute} radar(es) de velocidade média no trajeto!`
         : `Nenhum radar de média cadastrado neste trecho até o momento.`;
 
-      switchTab(null); // Fecha aba para ver o mapa
+      switchTab(null);
     }
   } catch(e) {
-    alert('Não foi possível traçar a rota online. Verifique a conexão.');
+    alert('Não foi possível traçar a rota online.');
   } finally {
-    btn.textContent = '🚗 Traçar Trajeto no Mapa';
+    btn.textContent = '🚗 Apenas Simular Trajeto no Mapa';
   }
 };
 
-// Navegação direta com Waze e Google Maps
-$('btnNavWaze').onclick = () => {
-  const dest = destCoords || (run ? T[run.i].B : (T.length ? T[0].A : null));
-  if (!dest) return alert('Digite um endereço de destino.');
-  window.open(`https://waze.com/ul?ll=${dest[0]},${dest[1]}&navigate=yes`, '_blank');
-};
+// Navegação direta com 1 Toque (Auto-GPS + Waze / Google Maps)
+function launchNavigation(app) {
+  startGps();
+  const destInput = $('addrDest').value.trim();
 
-$('btnNavMaps').onclick = () => {
-  const dest = destCoords || (run ? T[run.i].B : (T.length ? T[0].A : null));
-  if (!dest) return alert('Digite um endereço de destino.');
-  let url = `https://www.google.com/maps/dir/?api=1&destination=${dest[0]},${dest[1]}`;
-  if (originCoords) url += `&origin=${originCoords[0]},${originCoords[1]}`;
-  window.open(url, '_blank');
-};
+  if (app === 'waze') {
+    let url = '';
+    if (destCoords) {
+      url = `https://waze.com/ul?ll=${destCoords[0]},${destCoords[1]}&navigate=yes`;
+    } else if (destInput) {
+      url = `https://waze.com/ul?q=${encodeURIComponent(destInput)}&navigate=yes`;
+    } else if (me) {
+      url = `https://waze.com/ul?ll=${me[0]},${me[1]}&navigate=yes`;
+    } else {
+      url = `https://waze.com/ul?navigate=yes`;
+    }
+    speak('Iniciando navegação no Waze com RadarFlow ativo.');
+    window.open(url, '_blank');
+  } else if (app === 'maps') {
+    let url = '';
+    if (destCoords) {
+      url = `https://www.google.com/maps/dir/?api=1&destination=${destCoords[0]},${destCoords[1]}&travelmode=driving&dir_action=navigate`;
+    } else if (destInput) {
+      url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destInput)}&travelmode=driving&dir_action=navigate`;
+    } else if (me) {
+      url = `https://www.google.com/maps/@${me[0]},${me[1]},16z`;
+    } else {
+      url = `https://www.google.com/maps`;
+    }
+    if (originCoords && (destCoords || destInput)) {
+      url += `&origin=${originCoords[0]},${originCoords[1]}`;
+    }
+    speak('Iniciando navegação no Google Maps com RadarFlow ativo.');
+    window.open(url, '_blank');
+  }
+
+  switchTab(null);
+  setSt(`Navegação aberta no ${app === 'waze' ? 'Waze' : 'Google Maps'}. RadarFlow monitorando.`);
+}
+
+$('btnNavWaze').onclick = () => launchNavigation('waze');
+$('btnNavMaps').onclick = () => launchNavigation('maps');
 
 // Áudio e Voz Sintetizada
 let audioCtx = null;
@@ -871,19 +906,52 @@ $('seg').onclick = () => {
 function stopSim() { if (sim) { clearInterval(sim); sim = null; } $('sim').textContent = '▶️ Testar Simulação'; }
 function stopGps() { if (wid != null) { navigator.geolocation.clearWatch(wid); wid = null; } $('gps').textContent = 'Ligar GPS'; $('gps').style.background = '#1b7a4b'; }
 
-$('gps').onclick = () => {
-  if (wid != null) { stopGps(); return; }
+function startGps() {
+  if (wid != null) return;
   requestWakeLock();
   stopSim(); run = null; result = null; tick = 0;
   wid = navigator.geolocation.watchPosition(
-    p => onFix([p.coords.latitude, p.coords.longitude], p.timestamp, p.coords.accuracy, p.coords.speed),
+    p => {
+      const pos = [p.coords.latitude, p.coords.longitude];
+      if (!originCoords) {
+        originCoords = pos;
+        $('addrOrigin').value = '📍 Minha Localização Atual';
+      }
+      onFix(pos, p.timestamp, p.coords.accuracy, p.coords.speed);
+    },
     e => setSt('Erro de GPS: ' + (e.message || 'Verifique as permissões.')),
     {enableHighAccuracy: true, maximumAge: 0}
   );
   $('gps').textContent = 'Desligar GPS';
   $('gps').style.background = 'var(--bad)';
+}
+
+$('gps').onclick = () => {
+  if (wid != null) { stopGps(); return; }
+  startGps();
   switchTab(null);
 };
+
+// Detecção Automática de Localização ao Abrir o App
+function initAutoLocation() {
+  if ('geolocation' in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      p => {
+        const pos = [p.coords.latitude, p.coords.longitude];
+        me = pos;
+        if (!originCoords) originCoords = pos;
+        $('addrOrigin').value = '📍 Minha Localização Atual';
+        meM.setLatLng(pos);
+        if (!map.hasLayer(meM)) meM.addTo(map);
+        map.setView(pos, 15);
+        setSt('Localização detectada. Digite o destino e selecione Waze ou Maps.');
+      },
+      err => {},
+      {enableHighAccuracy: true, timeout: 8000, maximumAge: 30000}
+    );
+  }
+}
+initAutoLocation();
 
 $('sim').onclick = () => {
   if (sim) { stopSim(); return; }
