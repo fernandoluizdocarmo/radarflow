@@ -192,6 +192,7 @@ button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
     <div class="hud-head">
       <div class="hud-title" id="radarName">RadarFlow</div>
       <div class="hud-tools">
+        <button class="tool-btn" id="btnInstall" title="Instalar aplicativo na tela inicial" style="background:var(--sign);color:#12171c;border-color:var(--sign);font-weight:700">📲 Instalar</button>
         <button class="tool-btn active" id="btnAudio" title="Alertas de Som">🔊 Som</button>
         <button class="tool-btn" id="btnPip" title="Janela Flutuante sobre o Waze">⧉ Flutuante</button>
       </div>
@@ -351,6 +352,18 @@ button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
   </div>
 </div>
 
+<!-- Modal de Ajuda de Instalação PWA -->
+<div id="installModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px;max-width:380px;width:100%;box-shadow:0 12px 36px rgba(0,0,0,0.5)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:18px;font-weight:700">📲 Instalar o RadarFlow</div>
+      <button style="background:none;border:none;color:var(--mut);font-size:22px;cursor:pointer" onclick="$('installModal').style.display='none'">✕</button>
+    </div>
+    <div id="installModalContent" style="font-size:14px;color:var(--mut);line-height:1.5"></div>
+    <button class="btn-primary" style="margin-top:16px" onclick="$('installModal').style.display='none'">Entendi</button>
+  </div>
+</div>
+
 <!-- Canvas PiP para Overlay sobre o Waze -->
 <canvas id="pipCanvas" width="400" height="240"></canvas>
 <video id="pipVideo" autoplay muted playsinline></video>
@@ -362,6 +375,57 @@ if ('serviceWorker' in navigator) {
 }
 
 const $ = id => document.getElementById(id);
+
+// Gerenciamento de Instalação PWA (Botão 📲 Instalar)
+let deferredPrompt = null;
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+if (isStandalone) {
+  $('btnInstall').style.display = 'none'; // Já está instalado como app nativo!
+}
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (!isStandalone) $('btnInstall').style.display = 'inline-flex';
+});
+
+$('btnInstall').onclick = async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      $('btnInstall').style.display = 'none';
+      setSt('RadarFlow adicionado à sua tela inicial!');
+    }
+    deferredPrompt = null;
+  } else {
+    const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+    const modal = $('installModal');
+    const content = $('installModalContent');
+    if (isIos) {
+      content.innerHTML = `
+        Para instalar no seu <b>iPhone (Safari)</b>:<br><br>
+        1. Toque no botão <b>Compartilhar</b> (ícone com quadrado e seta para cima <span style="font-size:18px">⎋</span> na barra inferior do navegador).<br><br>
+        2. Role as opções e selecione <b>"Adicionar à Tela de Início"</b> 📲.<br><br>
+        3. Toque em <b>Adicionar</b>. O RadarFlow abrirá em tela cheia como um app nativo!
+      `;
+    } else {
+      content.innerHTML = `
+        Para instalar no <b>Android / Chrome / Edge</b>:<br><br>
+        1. Toque nos <b>3 pontinhos (⋮)</b> no topo direito do navegador.<br><br>
+        2. Selecione <b>"Instalar aplicativo"</b> ou <b>"Adicionar à tela inicial"</b> 📲.<br><br>
+        3. Confirme para ter o app disponível direto no seu celular.
+      `;
+    }
+    modal.style.display = 'flex';
+  }
+};
+
+window.addEventListener('appinstalled', () => {
+  $('btnInstall').style.display = 'none';
+  setSt('RadarFlow instalado como aplicativo!');
+});
 const R = 6371000, rad = Math.PI / 180;
 
 const hav = (a, b) => {
