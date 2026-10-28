@@ -4,7 +4,7 @@
   "private": true,
   "description": "RadarFlow: Copiloto em tempo real para monitoramento de radares de velocidade média com overlay para Waze e Google Maps.",
   "scripts": {
-    "start": "node server.js"
+    "local": "node server.js"
   },
   "keywords": [
     "radar",
