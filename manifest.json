@@ -1,0 +1,18 @@
+{
+  "name": "Radar de Velocidade Média",
+  "short_name": "RadarMédia",
+  "description": "Monitoramento em tempo real de trechos com radar de velocidade média.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#17212b",
+  "theme_color": "#17212b",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

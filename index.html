@@ -1,0 +1,943 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Radar de Velocidade Média</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#12171c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e1318;
+  --card:#182028;
+  --card-sub:#222c37;
+  --ink:#ffffff;
+  --mut:#8c9ba8;
+  --line:#2c3845;
+  --blue:#2a6df4;
+  --blue-hover:#1c59d6;
+  --waze:#00d6fe;
+  --maps:#34a853;
+  --sign:#ffc20e;
+  --ok:#2ecc71;
+  --bad:#ff4757;
+  --warn:#ffa502;
+  --hud-bg:rgba(20, 27, 34, 0.95);
+  --safe-bottom:env(safe-area-inset-bottom, 10px);
+  --safe-top:env(safe-area-inset-top, 10px);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;padding:0;background:var(--bg);color:var(--ink);font:500 15px/1.4 Barlow,system-ui,-apple-system,sans-serif;-webkit-tap-highlight-color:transparent;overflow:hidden}
+
+#app-container{position:relative;width:100%;height:100%;display:flex;flex-direction:column}
+#map{position:absolute;inset:0;z-index:1}
+
+/* HUD Superior em Condução */
+.hud{
+  position:absolute;z-index:500;left:12px;right:12px;top:calc(8px + var(--safe-top));
+  background:var(--hud-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border-radius:16px;padding:12px 14px;box-shadow:0 8px 30px rgba(0,0,0,0.45);
+  border:1px solid var(--line);border-left:7px solid var(--sign);
+  transition:all .25s ease;
+}
+.hud[data-s=ok]{border-left-color:var(--ok)}
+.hud[data-s=bad]{border-left-color:var(--bad)}
+.hud[data-s=warn]{border-left-color:var(--warn)}
+
+.hud-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.hud-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:65%}
+.hud-tools{display:flex;gap:6px}
+.tool-btn{
+  background:var(--card-sub);border:1px solid var(--line);border-radius:20px;
+  color:var(--ink);font-size:12px;font-weight:600;padding:4px 9px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:4px;min-height:30px;
+}
+.tool-btn.active{background:var(--blue);border-color:var(--blue);color:#fff}
+
+.speed-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:baseline}
+.speed-box{display:grid}
+.speed-box small{font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:0.5px}
+.speed-val{font:700 48px/0.95 "Barlow Condensed",Impact,sans-serif;font-variant-numeric:tabular-nums}
+.hud[data-s=ok] #avg{color:var(--ok)}
+.hud[data-s=bad] #avg{color:var(--bad)}
+.hud[data-s=warn] #avg{color:var(--warn)}
+
+.prog-track{width:100%;height:5px;background:var(--line);border-radius:3px;margin:10px 0 6px;overflow:hidden;display:none}
+.prog-fill{height:100%;background:var(--blue);width:0%;transition:width .2s}
+
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
+.stat-box{display:grid}
+.stat-box small{font-size:10.5px;color:var(--mut);text-transform:uppercase}
+.stat-box b{font:700 18px/1.2 "Barlow Condensed",Impact,sans-serif}
+
+#st{margin:6px 0 0;font-size:12px;color:var(--mut);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Painel Flutuante / Bottom Sheets */
+.tab-content{
+  position:absolute;z-index:600;left:0;right:0;bottom:calc(66px + var(--safe-bottom));
+  background:var(--hud-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-top-left-radius:24px;border-top-right-radius:24px;
+  border:1px solid var(--line);border-bottom:none;
+  box-shadow:0 -10px 35px rgba(0,0,0,0.5);
+  max-height:68vh;overflow-y:auto;display:none;padding:16px 16px 20px;
+}
+.tab-content.active{display:block;animation:slideUp .25s ease-out}
+
+@keyframes slideUp{
+  from{transform:translateY(30px);opacity:0}
+  to{transform:translateY(0);opacity:1}
+}
+
+.panel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.panel-title{font-size:18px;font-weight:700;letter-spacing:-0.2px}
+.close-btn{background:transparent;border:none;color:var(--mut);font-size:22px;cursor:pointer;padding:0 6px}
+
+/* Inputs e Formulários */
+.field{display:grid;gap:6px;margin-bottom:12px}
+.field label{font-size:12px;font-weight:600;text-transform:uppercase;color:var(--mut);display:flex;justify-content:space-between}
+.input-with-action{display:flex;gap:6px}
+input,select,textarea{
+  background:var(--card);border:1px solid var(--line);border-radius:12px;
+  color:#fff;padding:10px 12px;font-size:15px;width:100%;min-height:44px;outline:none;
+}
+input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(42,109,244,0.3)}
+button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+
+.btn-icon{
+  background:var(--card-sub);border:1px solid var(--line);border-radius:12px;
+  color:var(--ink);padding:0 12px;min-height:44px;display:flex;align-items:center;justify-content:center;
+}
+.btn-primary{
+  background:var(--blue);color:#fff;border:none;border-radius:12px;
+  font-weight:600;padding:12px;min-height:46px;width:100%;font-size:15px;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.btn-primary:active{background:var(--blue-hover)}
+
+.quick-nav{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.btn-waze{
+  background:#00d6fe;color:#053540;border:none;border-radius:12px;
+  font-weight:700;padding:12px;min-height:46px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;
+}
+.btn-maps{
+  background:#34a853;color:#ffffff;border:none;border-radius:12px;
+  font-weight:700;padding:12px;min-height:46px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;
+}
+
+/* Sugestões de Endereço */
+.suggestions{
+  background:var(--card);border:1px solid var(--line);border-radius:12px;
+  margin-top:-6px;margin-bottom:10px;max-height:180px;overflow-y:auto;display:none;
+}
+.sugg-item{
+  padding:10px 12px;font-size:13.5px;border-bottom:1px solid var(--line);
+  cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.sugg-item:last-child{border-bottom:none}
+.sugg-item:active{background:var(--card-sub)}
+
+/* Barra Inferior de Abas (Mobile Bottom Bar) */
+.bottom-bar{
+  position:absolute;z-index:700;left:0;right:0;bottom:0;
+  height:calc(60px + var(--safe-bottom));padding-bottom:var(--safe-bottom);
+  background:rgba(18, 24, 30, 0.96);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4, 1fr);align-items:center;
+}
+.tab-btn{
+  background:none;border:none;color:var(--mut);padding:6px 0;
+  display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;
+  transition:all .15s ease;
+}
+.tab-btn span.icon{font-size:20px;line-height:1}
+.tab-btn.active{color:var(--blue)}
+.tab-btn.active span.icon{transform:scale(1.15)}
+
+/* Trechos Cadastrados */
+.radar-card{
+  background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:12px;margin-bottom:10px;display:grid;gap:8px;
+}
+.radar-card-top{display:flex;justify-content:space-between;align-items:center}
+.radar-name{font-weight:700;font-size:15px}
+.radar-limit{
+  background:#ffc20e;color:#17212b;font-weight:700;font-size:13px;
+  border-radius:20px;padding:2px 8px;font-family:"Barlow Condensed",Impact,sans-serif;
+}
+.radar-card-actions{display:flex;gap:6px;justify-content:flex-end}
+.radar-btn-sm{
+  background:var(--card-sub);border:1px solid var(--line);border-radius:8px;
+  padding:6px 10px;font-size:12px;font-weight:600;color:var(--ink);
+}
+
+/* Canvas PiP oculto */
+#pipCanvas{display:none}
+#pipVideo{position:fixed;width:1px;height:1px;opacity:0.01;pointer-events:none}
+</style>
+</head>
+<body>
+
+<div id="app-container">
+  <!-- Mapa Fundo -->
+  <div id="map"></div>
+
+  <!-- HUD Principal Superior (Visualizador da Direção) -->
+  <div class="hud" id="hud" data-s="ok">
+    <div class="hud-head">
+      <div class="hud-title" id="radarName">Aguardando Trecho</div>
+      <div class="hud-tools">
+        <button class="tool-btn active" id="btnAudio" title="Alertas de Som">🔊 Som</button>
+        <button class="tool-btn" id="btnPip" title="Janela Flutuante sobre o Waze">⧉ Flutuante</button>
+      </div>
+    </div>
+
+    <div class="speed-grid">
+      <div class="speed-box">
+        <small>Média no Trecho</small>
+        <div><b class="speed-val" id="avg">0,0</b> <span style="font-size:13px;font-weight:600;color:var(--mut)">km/h</span></div>
+      </div>
+      <div class="speed-box">
+        <small>Velocidade Agora</small>
+        <div><b class="speed-val" id="now">0,0</b> <span style="font-size:13px;font-weight:600;color:var(--mut)">km/h</span></div>
+      </div>
+    </div>
+
+    <div class="prog-track" id="progBar"><div class="prog-fill" id="progFill"></div></div>
+
+    <div class="stat-row">
+      <div class="stat-box"><small>Distância</small><b id="dist">0 m</b></div>
+      <div class="stat-box"><small>Tempo</small><b id="tempo">0:00</b></div>
+      <div class="stat-box"><small>Máx. Restante</small><b id="rest">—</b></div>
+    </div>
+    <p id="st" role="status">GPS desligado. Abra a aba Radar ou clique em Ligar GPS.</p>
+  </div>
+
+  <!-- ABA 1: ROTA & DESTINO (Digitar Endereços e Integrar ao Waze/Maps) -->
+  <div class="tab-content" id="tabRoute">
+    <div class="panel-header">
+      <div class="panel-title">📍 Traçar Rota & Endereços</div>
+      <button class="close-btn" onclick="switchTab(null)">✕</button>
+    </div>
+
+    <!-- Ponto Inicial -->
+    <div class="field">
+      <label>
+        <span>Ponto Inicial / Origem</span>
+        <a href="javascript:void(0)" id="useMyLoc" style="color:var(--blue);text-decoration:none">📍 Usar meu GPS</a>
+      </label>
+      <div class="input-with-action">
+        <input id="addrOrigin" type="text" placeholder="Ex: Av. Paulista, 1000 - SP" autocomplete="off">
+        <button class="btn-icon" id="searchOriginBtn" title="Buscar Origem">🔍</button>
+      </div>
+      <div class="suggestions" id="originSuggestions"></div>
+    </div>
+
+    <!-- Endereço Onde Vou (Destino) -->
+    <div class="field">
+      <label><span>Endereço Onde Vou (Destino)</span></label>
+      <div class="input-with-action">
+        <input id="addrDest" type="text" placeholder="Ex: Rodovia dos Imigrantes km 20" autocomplete="off">
+        <button class="btn-icon" id="searchDestBtn" title="Buscar Destino">🔍</button>
+      </div>
+      <div class="suggestions" id="destSuggestions"></div>
+    </div>
+
+    <button class="btn-primary" id="btnCalculateRoute">
+      <span>🚗 Traçar Trajeto no Mapa</span>
+    </button>
+
+    <div id="routeInfo" style="margin-top:10px;font-size:13px;color:var(--mut);display:none">
+      <b style="color:var(--ink)" id="routeDistTime">—</b>
+      <div id="routeRadarsAlert" style="margin-top:4px;color:var(--sign)"></div>
+    </div>
+
+    <div class="quick-nav">
+      <button class="btn-waze" id="btnNavWaze">🚙 Iniciar no Waze</button>
+      <button class="btn-maps" id="btnNavMaps">🗺️ Google Maps</button>
+    </div>
+  </div>
+
+  <!-- ABA 2: RADAR & CONTROLES -->
+  <div class="tab-content" id="tabRadar">
+    <div class="panel-header">
+      <div class="panel-title">🧭 Controles de Condução</div>
+      <button class="close-btn" onclick="switchTab(null)">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <button id="gps" class="btn-primary" style="background:#1b7a4b">Ligar GPS</button>
+      <button id="seg" class="btn-primary" style="background:var(--card-sub);border:1px solid var(--line)" aria-pressed="true">Centralizar</button>
+    </div>
+    <button id="addNewSectionMap" class="btn-primary" style="background:var(--card-sub);border:1px solid var(--line);margin-bottom:12px">
+      + Marcar Trecho Manualmente no Mapa
+    </button>
+    <div style="font-size:13px;color:var(--mut);line-height:1.4">
+      💡 <b>Dica no Celular:</b> Ative o GPS e clique em <b>"⧉ Flutuante"</b> para exibir a velocidade média em janela sobre o Waze!
+    </div>
+  </div>
+
+  <!-- ABA 3: TRECHOS DE RADAR SALVOS -->
+  <div class="tab-content" id="tabSections">
+    <div class="panel-header">
+      <div class="panel-title">📋 Radares de Média</div>
+      <button class="close-btn" onclick="switchTab(null)">✕</button>
+    </div>
+    <div id="list"></div>
+    <button class="btn-primary" id="btnExport" style="background:var(--card-sub);border:1px solid var(--line);margin-top:8px">
+      📋 Copiar Lista de Radares
+    </button>
+  </div>
+
+  <!-- ABA 4: AJUSTES & SIMULAÇÃO -->
+  <div class="tab-content" id="tabSettings">
+    <div class="panel-header">
+      <div class="panel-title">⚙️ Ajustes & Simulação</div>
+      <button class="close-btn" onclick="switchTab(null)">✕</button>
+    </div>
+    <div class="field">
+      <label>Trecho para Simular</label>
+      <select id="selT"></select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div class="field">
+        <label>Km/h Simulação</label>
+        <input id="simv" type="number" inputmode="numeric" value="85">
+      </div>
+      <div class="field">
+        <label>Raio de Detecção (m)</label>
+        <input id="raio" type="number" inputmode="numeric" value="40">
+      </div>
+    </div>
+    <button class="btn-primary" id="sim" style="margin-bottom:12px">▶️ Testar Simulação</button>
+    
+    <details style="margin-top:14px">
+      <summary style="cursor:pointer;color:var(--mut);font-size:13px;font-weight:600">📥 Importar Radares em Texto</summary>
+      <textarea id="imp" style="margin-top:8px;min-height:80px" placeholder="Nome; Lat A, Lon A; Lat B, Lon B; Limite; Dist m"></textarea>
+      <button class="btn-primary" id="doImp" style="margin-top:8px">Importar</button>
+    </details>
+  </div>
+
+  <!-- BARRA INFERIOR DE ABAS (Mobile First Bottom Bar) -->
+  <div class="bottom-bar">
+    <button class="tab-btn active" id="tabBtnDriving" onclick="switchTab(null)">
+      <span class="icon">🧭</span>
+      <span>Radar</span>
+    </button>
+    <button class="tab-btn" id="tabBtnRoute" onclick="switchTab('tabRoute')">
+      <span class="icon">📍</span>
+      <span>Trajeto</span>
+    </button>
+    <button class="tab-btn" id="tabBtnSections" onclick="switchTab('tabSections')">
+      <span class="icon">📋</span>
+      <span>Trechos</span>
+    </button>
+    <button class="tab-btn" id="tabBtnSettings" onclick="switchTab('tabSettings')">
+      <span class="icon">⚙️</span>
+      <span>Ajustes</span>
+    </button>
+  </div>
+</div>
+
+<!-- Canvas PiP para Overlay sobre o Waze -->
+<canvas id="pipCanvas" width="400" height="240"></canvas>
+<video id="pipVideo" autoplay muted playsinline></video>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+
+const $ = id => document.getElementById(id);
+const R = 6371000, rad = Math.PI / 180;
+
+const hav = (a, b) => {
+  const x = (b[0] - a[0]) * rad, y = (b[1] - a[1]) * rad;
+  const h = Math.sin(x / 2) ** 2 + Math.cos(a[0] * rad) * Math.cos(b[0] * rad) * (Math.sin(y / 2) ** 2);
+  return 2 * R * Math.asin(Math.sqrt(h));
+};
+
+const f1 = n => n.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+const fmtT = ms => {
+  const s = Math.round(ms / 1000);
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+};
+const raio = () => +$('raio').value || 40;
+
+// Base inicial
+const INITIAL_DEMO = [
+  {
+    n: "Trecho Demonstração (SP/MG)",
+    A: [-19.6201, -44.0402],
+    B: [-19.6350, -44.0311],
+    lim: 60,
+    off: 1850
+  }
+];
+
+let T = [];
+try {
+  T = JSON.parse(localStorage.getItem('rvm2') || 'null');
+  if (!T || !T.length) T = INITIAL_DEMO;
+} catch(e) { T = INITIAL_DEMO; }
+const save = () => { try { localStorage.setItem('rvm2', JSON.stringify(T)); } catch(e){} };
+
+let me = null, run = null, result = null, block = -1, spd = 0, lastFix = null;
+let sim = null, wid = null, follow = true, adding = null, tick = 0;
+let audioEnabled = true, lastSpoken = 0, lastWarnedTime = 0, wakeLock = null;
+
+// Rota OSRM
+let routeLayer = null;
+let originCoords = null;
+let destCoords = null;
+
+// Mapa
+const map = L.map('map', {zoomControl: false}).setView([-19.62, -44.04], 13);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19, attribution: '© OpenStreetMap'}).addTo(map);
+const grp = L.layerGroup().addTo(map);
+const trailL = L.polyline([], {color: '#2a6df4', weight: 6, opacity: 0.9}).addTo(map);
+const meM = L.circleMarker([0,0], {radius: 9, color: '#fff', weight: 3, fillColor: '#2a6df4', fillOpacity: 1});
+
+map.on('dragstart', () => { follow = false; $('seg').style.background = 'var(--card-sub)'; });
+
+// Gerenciamento de Abas Móveis
+let activeTabId = null;
+function switchTab(tabId) {
+  ['tabRoute', 'tabRadar', 'tabSections', 'tabSettings'].forEach(id => {
+    $(id).classList.remove('active');
+  });
+  ['tabBtnDriving', 'tabBtnRoute', 'tabBtnSections', 'tabBtnSettings'].forEach(id => {
+    $(id).classList.remove('active');
+  });
+
+  if (tabId && tabId !== activeTabId) {
+    $(tabId).classList.add('active');
+    activeTabId = tabId;
+    if (tabId === 'tabRoute') $('tabBtnRoute').classList.add('active');
+    if (tabId === 'tabSections') $('tabBtnSections').classList.add('active');
+    if (tabId === 'tabSettings') $('tabBtnSettings').classList.add('active');
+  } else {
+    activeTabId = null;
+    $('tabBtnDriving').classList.add('active');
+  }
+}
+
+// Geocodificação OpenStreetMap Nominatim (Busca de Endereços)
+async function searchAddress(query) {
+  if (!query || query.length < 3) return [];
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=br&limit=5`;
+  try {
+    const res = await fetch(url);
+    return await res.json();
+  } catch(e) {
+    return [];
+  }
+}
+
+function setupAddressSearch(inputId, btnId, suggId, onSelect) {
+  const inp = $(inputId), sugg = $(suggId), btn = $(btnId);
+  let timer = null;
+
+  const doSearch = async () => {
+    const q = inp.value.trim();
+    if (q.length < 3) { sugg.style.display = 'none'; return; }
+    sugg.innerHTML = '<div class="sugg-item" style="color:var(--mut)">Buscando endereço...</div>';
+    sugg.style.display = 'block';
+    const results = await searchAddress(q);
+    if (!results.length) {
+      sugg.innerHTML = '<div class="sugg-item" style="color:var(--mut)">Nenhum endereço encontrado</div>';
+      return;
+    }
+    sugg.innerHTML = results.map((r, i) => `
+      <div class="sugg-item" data-idx="${i}">${r.display_name}</div>
+    `).join('');
+    sugg.querySelectorAll('.sugg-item').forEach((el, i) => {
+      el.onclick = () => {
+        inp.value = results[i].display_name.split(',').slice(0, 3).join(',');
+        sugg.style.display = 'none';
+        onSelect([parseFloat(results[i].lat), parseFloat(results[i].lon)]);
+      };
+    });
+  };
+
+  btn.onclick = doSearch;
+  inp.oninput = () => {
+    clearTimeout(timer);
+    timer = setTimeout(doSearch, 600);
+  };
+}
+
+setupAddressSearch('addrOrigin', 'searchOriginBtn', 'originSuggestions', coords => {
+  originCoords = coords;
+});
+
+setupAddressSearch('addrDest', 'searchDestBtn', 'destSuggestions', coords => {
+  destCoords = coords;
+});
+
+// Usar Localização Atual como Ponto Inicial
+$('useMyLoc').onclick = () => {
+  if (me) {
+    originCoords = me;
+    $('addrOrigin').value = `Minha Localização (${me[0].toFixed(4)}, ${me[1].toFixed(4)})`;
+    $('originSuggestions').style.display = 'none';
+  } else {
+    alert('Ative o GPS primeiro ou aguarde a obtenção do sinal.');
+    $('gps').click();
+  }
+};
+
+// Traçar Rota via OSRM
+$('btnCalculateRoute').onclick = async () => {
+  if (!originCoords && me) originCoords = me;
+  if (!originCoords || !destCoords) {
+    alert('Por favor, defina o ponto inicial e o endereço de destino.');
+    return;
+  }
+  const btn = $('btnCalculateRoute');
+  btn.textContent = 'Calculando melhor trajeto...';
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${originCoords[1]},${originCoords[0]};${destCoords[1]},${destCoords[0]}?overview=full&geometries=geojson`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.routes && data.routes.length) {
+      const r = data.routes[0];
+      const coords = r.geometry.coordinates.map(c => [c[1], c[0]]);
+      if (routeLayer) map.removeLayer(routeLayer);
+      routeLayer = L.polyline(coords, {color: '#00d6fe', weight: 6, opacity: 0.85}).addTo(map);
+      map.fitBounds(routeLayer.getBounds(), {padding: [50, 50]});
+
+      const distKm = (r.distance / 1000).toFixed(1);
+      const timeMin = Math.round(r.duration / 60);
+      $('routeInfo').style.display = 'block';
+      $('routeDistTime').textContent = `Trajeto: ${distKm} km · Aproximadamente ${timeMin} min`;
+
+      // Verificar se há trechos de radar cadastrados ao longo da rota
+      let radarsOnRoute = 0;
+      T.forEach(radar => {
+        const near = coords.some(pt => hav(pt, radar.A) < 250);
+        if (near) radarsOnRoute++;
+      });
+      $('routeRadarsAlert').textContent = radarsOnRoute > 0
+        ? `⚠️ Atenção: ${radarsOnRoute} radar(es) de velocidade média no trajeto!`
+        : `Nenhum radar de média cadastrado neste trecho até o momento.`;
+
+      switchTab(null); // Fecha aba para ver o mapa
+    }
+  } catch(e) {
+    alert('Não foi possível traçar a rota online. Verifique a conexão.');
+  } finally {
+    btn.textContent = '🚗 Traçar Trajeto no Mapa';
+  }
+};
+
+// Navegação direta com Waze e Google Maps
+$('btnNavWaze').onclick = () => {
+  const dest = destCoords || (run ? T[run.i].B : (T.length ? T[0].A : null));
+  if (!dest) return alert('Digite um endereço de destino.');
+  window.open(`https://waze.com/ul?ll=${dest[0]},${dest[1]}&navigate=yes`, '_blank');
+};
+
+$('btnNavMaps').onclick = () => {
+  const dest = destCoords || (run ? T[run.i].B : (T.length ? T[0].A : null));
+  if (!dest) return alert('Digite um endereço de destino.');
+  let url = `https://www.google.com/maps/dir/?api=1&destination=${dest[0]},${dest[1]}`;
+  if (originCoords) url += `&origin=${originCoords[0]},${originCoords[1]}`;
+  window.open(url, '_blank');
+};
+
+// Áudio e Voz Sintetizada
+let audioCtx = null;
+function playBeep(freq = 880, duration = 0.18, count = 1) {
+  if (!audioEnabled) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    for (let i = 0; i < count; i++) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.frequency.value = freq;
+      const start = audioCtx.currentTime + i * 0.22;
+      gain.gain.setValueAtTime(0.3, start);
+      gain.gain.exponentialRampToValueAtTime(0.01, start + duration);
+      osc.start(start);
+      osc.stop(start + duration);
+    }
+  } catch(e){}
+}
+
+function speak(text, priority = false) {
+  if (!audioEnabled || !('speechSynthesis' in window)) return;
+  const now = Date.now();
+  if (!priority && now - lastSpoken < 4000) return;
+  lastSpoken = now;
+  try {
+    window.speechSynthesis.cancel();
+    const ut = new SpeechSynthesisUtterance(text);
+    ut.lang = 'pt-BR';
+    ut.rate = 1.05;
+    window.speechSynthesis.speak(ut);
+  } catch(e){}
+}
+
+$('btnAudio').onclick = () => {
+  audioEnabled = !audioEnabled;
+  $('btnAudio').textContent = audioEnabled ? '🔊 Som' : '🔇 Mudo';
+  $('btnAudio').classList.toggle('active', audioEnabled);
+  if (audioEnabled) {
+    playBeep(880, 0.1);
+    speak('Alertas sonoros ativados.');
+  }
+};
+
+// Wake Lock
+async function requestWakeLock() {
+  if ('wakeLock' in navigator && !wakeLock) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch(e){}
+  }
+}
+
+// Renderização dos Trechos no Mapa e Lista
+function drawT() {
+  grp.clearLayers();
+  T.forEach(t => {
+    L.circle(t.A, {radius: raio(), color: '#b88a00', fillColor: '#ffc20e', fillOpacity: .4, weight: 2})
+      .bindTooltip(t.n + ' · Início', {permanent: true, direction: 'top'}).addTo(grp);
+    L.circle(t.B, {radius: raio(), color: '#17212b', fillColor: '#17212b', fillOpacity: .4, weight: 2})
+      .bindTooltip('Fim', {permanent: true, direction: 'top'}).addTo(grp);
+    L.polyline([t.A, t.B], {color: '#17212b', weight: 4, dashArray: '8 6'}).addTo(grp);
+  });
+
+  $('list').innerHTML = '';
+  T.forEach((t, i) => {
+    const d = document.createElement('div');
+    d.className = 'radar-card';
+    d.innerHTML = `
+      <div class="radar-card-top">
+        <div class="radar-name">${t.n}</div>
+        <div class="radar-limit">${t.lim} km/h</div>
+      </div>
+      <div class="radar-card-actions">
+        <button class="radar-btn-sm" title="Ver no Mapa">🗺️ Ver</button>
+        <button class="radar-btn-sm" style="color:var(--waze)" title="Waze">🚙 Waze</button>
+        <button class="radar-btn-sm" style="color:var(--bad)" title="Excluir">✕</button>
+      </div>
+    `;
+    const [bMap, bWz, bDel] = d.querySelectorAll('.radar-btn-sm');
+    bMap.onclick = () => {
+      switchTab(null);
+      follow = false;
+      map.fitBounds([t.A, t.B], {padding: [70, 70]});
+    };
+    bWz.onclick = () => window.open(`https://waze.com/ul?ll=${t.A[0]},${t.A[1]}&navigate=yes`, '_blank');
+    bDel.onclick = () => {
+      if (confirm('Excluir este trecho?')) {
+        T.splice(i, 1); save(); drawT();
+      }
+    };
+    $('list').appendChild(d);
+  });
+  $('selT').innerHTML = T.map((t, i) => `<option value="${i}">${t.n.replace(/</g, '&lt;')}</option>`).join('');
+}
+
+function setSt(s) { $('st').textContent = s; }
+function vib(p) { try { navigator.vibrate && navigator.vibrate(p); } catch(e){} }
+
+// Processamento GPS
+function onFix(pos, t, acc, v) {
+  if (acc > 45) return;
+  me = pos;
+  meM.setLatLng(pos);
+  if (!map.hasLayer(meM)) meM.addTo(map);
+
+  if (v != null && !isNaN(v) && v >= 0) {
+    spd = v;
+  } else if (lastFix) {
+    const dt = (t - lastFix.t) / 1000;
+    if (dt > 0) spd = hav(lastFix.p, pos) / dt;
+  }
+  lastFix = {p: pos, t};
+  const r = raio();
+
+  if (block >= 0 && hav(pos, T[block] ? T[block].B : pos) > r * 3) {
+    block = -1;
+  }
+
+  // Alerta 500m antes do ponto A
+  if (!run) {
+    T.forEach((item, idx) => {
+      if (idx !== block) {
+        const distA = hav(pos, item.A);
+        if (distA > r && distA <= 500 && (t - lastWarnedTime > 25000)) {
+          lastWarnedTime = t;
+          playBeep(660, 0.15, 2);
+          speak(`Atenção: radar de média a ${Math.round(distA)} metros. Limite ${item.lim} por hora.`);
+        }
+      }
+    });
+  }
+
+  // Entrou no trecho
+  if (!run) {
+    const i = T.findIndex((x, k) => k !== block && hav(pos, x.A) <= r);
+    if (i >= 0) {
+      run = {i, t0: t, d: 0, last: pos, trail: [pos]};
+      result = null;
+      vib(200);
+      playBeep(980, 0.25, 2);
+      speak(`Entrou no trecho de média. Limite ${T[i].lim} por hora.`, true);
+    }
+  } else {
+    const st = hav(run.last, pos);
+    if (st >= 1) {
+      run.d += st;
+      run.last = pos;
+      run.trail.push(pos);
+    }
+    if (hav(pos, T[run.i].B) <= r) {
+      finish(t);
+    }
+  }
+
+  if (follow) {
+    if (wid != null && !tick++) map.setView(pos, 16);
+    else map.panTo(pos, {animate: true});
+  }
+  render(t);
+  updatePipCanvas();
+}
+
+function finish(t) {
+  const x = T[run.i];
+  const el = (t - run.t0) / 1000;
+  const d = x.off || run.d;
+  const v = (d / el) * 3.6;
+  result = {n: x.n, v, el: el * 1000, d, lim: x.lim, gps: !x.off};
+  block = run.i;
+  run = null;
+  vib([200, 100, 200]);
+
+  if (v > x.lim) {
+    playBeep(440, 0.3, 3);
+    speak(`Fim de trecho. Média ${Math.round(v)} por hora. Acima do limite de ${x.lim}!`, true);
+  } else {
+    playBeep(880, 0.2, 2);
+    speak(`Fim de trecho. Média ${Math.round(v)} por hora. Dentro do limite.`, true);
+  }
+}
+
+function render(t) {
+  let avg = 0, el = 0, dist = 0, s = 'ok', lim = 60, rest = '—', radarTitle = 'Radar de Média';
+  const progBar = $('progBar');
+  const progFill = $('progFill');
+
+  if (run) {
+    const x = T[run.i];
+    lim = x.lim;
+    el = t - run.t0;
+    dist = run.d;
+    avg = el > 1000 ? (dist / (el / 1000)) * 3.6 : 0;
+    const totalDist = x.off || hav(x.A, x.B);
+    const remTime = (totalDist / (lim / 3.6)) - (el / 1000);
+    const remDist = Math.max(totalDist - run.d, 0);
+
+    radarTitle = x.n + ` (${lim} km/h)`;
+    rest = remTime <= 0 ? 'Já passou' : remDist <= 0 ? '—' : f1((remDist / remTime) * 3.6) + ' km/h';
+
+    const pct = Math.min(100, Math.max(0, (dist / totalDist) * 100));
+    progBar.style.display = 'block';
+    progFill.style.width = pct + '%';
+
+    if (avg > lim) {
+      s = 'bad';
+      setSt(`⚠️ Média atual (${f1(avg)} km/h) ACIMA do limite de ${lim} km/h!`);
+      if (t - lastWarnedTime > 16000 && el > 6000) {
+        lastWarnedTime = t;
+        playBeep(520, 0.18, 2);
+        speak(`Atenção: velocidade média acima do limite.`);
+      }
+    } else if (avg > lim * 0.93) {
+      s = 'warn';
+      setSt(`Média no limite (${f1(avg)} / ${lim} km/h). Atenção.`);
+    } else {
+      s = 'ok';
+      setSt(`${x.n}: Média dentro do limite de ${lim} km/h.`);
+    }
+  } else if (result) {
+    progBar.style.display = 'none';
+    avg = result.v; el = result.el; dist = result.d; lim = result.lim;
+    radarTitle = result.n + ' (Concluído)';
+    s = avg > lim ? 'bad' : 'ok';
+    setSt(`${result.n} concluído: ${f1(avg)} km/h. ${avg > lim ? '⚠️ Acima do limite' : '✅ Dentro do limite'} de ${lim} km/h.`);
+  } else {
+    progBar.style.display = 'none';
+    setSt(adding ? `Toque no mapa para marcar o ponto ${adding.A ? 'B' : 'A'}.` : T.length ? 'Aguardando aproximação de radar.' : 'Cadastre radares.');
+  }
+
+  $('radarName').textContent = radarTitle;
+  $('avg').textContent = f1(avg);
+  $('now').textContent = f1(spd * 3.6);
+  $('dist').textContent = Math.round(dist) + ' m';
+  $('tempo').textContent = fmtT(el);
+  $('rest').textContent = rest;
+  $('hud').dataset.s = s;
+  trailL.setLatLngs(run ? run.trail : []);
+}
+
+// Picture-in-Picture Flutuante
+const pipCanvas = $('pipCanvas'), pipVideo = $('pipVideo'), pctx = pipCanvas.getContext('2d');
+function updatePipCanvas() {
+  if (document.pictureInPictureElement !== pipVideo && pipVideo.paused) return;
+  pctx.fillStyle = '#141b22';
+  pctx.fillRect(0, 0, 400, 240);
+
+  const s = $('hud').dataset.s;
+  pctx.fillStyle = s === 'bad' ? '#ff4757' : s === 'warn' ? '#ffa502' : '#2ecc71';
+  pctx.fillRect(0, 0, 16, 240);
+
+  pctx.fillStyle = '#8c9ba8';
+  pctx.font = '16px sans-serif';
+  pctx.fillText($('radarName').textContent.substring(0, 32), 30, 34);
+
+  pctx.fillText('MÉDIA NO TRECHO', 30, 80);
+  pctx.fillStyle = s === 'bad' ? '#ff4757' : '#ffffff';
+  pctx.font = 'bold 54px sans-serif';
+  pctx.fillText($('avg').textContent + ' km/h', 30, 135);
+
+  pctx.fillStyle = '#8c9ba8';
+  pctx.font = '16px sans-serif';
+  pctx.fillText('AGORA: ' + $('now').textContent + ' km/h', 30, 185);
+  pctx.fillText('MÁX. RESTANTE: ' + $('rest').textContent, 30, 215);
+}
+
+$('btnPip').onclick = async () => {
+  try {
+    if (document.pictureInPictureElement) {
+      await document.exitPictureInPicture();
+      $('btnPip').classList.remove('active');
+      return;
+    }
+    updatePipCanvas();
+    if (!pipVideo.srcObject) {
+      pipVideo.srcObject = pipCanvas.captureStream(10);
+      await pipVideo.play();
+    }
+    await pipVideo.requestPictureInPicture();
+    $('btnPip').classList.add('active');
+  } catch(e) {
+    alert('Picture-in-Picture não suportado neste navegador.');
+  }
+};
+
+// Adicionar Trecho Manual
+map.on('click', e => {
+  if (!adding) return;
+  const p = [e.latlng.lat, e.latlng.lng];
+  if (!adding.A) {
+    adding.A = p;
+    setSt('Ponto A definido. Toque no mapa para marcar o ponto B final.');
+  } else {
+    T.push({n: 'Trecho ' + (T.length + 1), A: adding.A, B: p, lim: 60, off: 0});
+    adding = null;
+    save(); drawT();
+    setSt('Novo trecho cadastrado!');
+  }
+  render(0);
+});
+
+$('addNewSectionMap').onclick = () => {
+  adding = {};
+  switchTab(null);
+  setSt('Toque no mapa para marcar o Ponto A (início do radar).');
+};
+
+$('seg').onclick = () => {
+  follow = !follow;
+  $('seg').style.background = follow ? 'var(--blue)' : 'var(--card-sub)';
+  if (follow && me) map.panTo(me);
+};
+
+// GPS
+function stopSim() { if (sim) { clearInterval(sim); sim = null; } $('sim').textContent = '▶️ Testar Simulação'; }
+function stopGps() { if (wid != null) { navigator.geolocation.clearWatch(wid); wid = null; } $('gps').textContent = 'Ligar GPS'; $('gps').style.background = '#1b7a4b'; }
+
+$('gps').onclick = () => {
+  if (wid != null) { stopGps(); return; }
+  requestWakeLock();
+  stopSim(); run = null; result = null; tick = 0;
+  wid = navigator.geolocation.watchPosition(
+    p => onFix([p.coords.latitude, p.coords.longitude], p.timestamp, p.coords.accuracy, p.coords.speed),
+    e => setSt('Erro de GPS: ' + (e.message || 'Verifique as permissões.')),
+    {enableHighAccuracy: true, maximumAge: 0}
+  );
+  $('gps').textContent = 'Desligar GPS';
+  $('gps').style.background = 'var(--bad)';
+  switchTab(null);
+};
+
+$('sim').onclick = () => {
+  if (sim) { stopSim(); return; }
+  const x = T[+$('selT').value];
+  if (!x) return alert('Selecione um trecho.');
+
+  stopGps(); run = null; result = null; block = -1; follow = true;
+  const tot = hav(x.A, x.B), lead = 250, k = 4, base = +$('simv').value || 85;
+  let s = -lead, t = 0; const t0 = Date.now();
+
+  map.fitBounds([x.A, x.B], {padding: [70, 70]});
+  $('sim').textContent = '⏹️ Parar Simulação';
+  switchTab(null);
+  speak(`Iniciando simulação.`);
+
+  sim = setInterval(() => {
+    t += 200 * k;
+    const v = (base + 12 * Math.sin(t / 4000)) / 3.6;
+    s += v * 0.2 * k;
+    const f = s / tot;
+    onFix([x.A[0] + (x.B[0] - x.A[0]) * f, x.A[1] + (x.B[1] - x.A[1]) * f], t0 + t, 5, v);
+    if (s > tot + lead) stopSim();
+  }, 200);
+};
+
+$('btnExport').onclick = async () => {
+  const txt = T.map(t => [t.n, t.A.map(v => v.toFixed(5)).join(', '), t.B.map(v => v.toFixed(5)).join(', '), t.lim, t.off || ''].join('; ')).join('\n');
+  try {
+    await navigator.clipboard.writeText(txt);
+    alert('Lista de trechos copiada com sucesso!');
+  } catch(e) { prompt('Copie os dados:', txt); }
+};
+
+$('doImp').onclick = () => {
+  let n = 0;
+  $('imp').value.split('\n').forEach(l => {
+    const p = l.split(';').map(s => s.trim());
+    if (p.length < 3) return;
+    const ll = s => {
+      const m = s.match(/-?\d+(?:[.,]\d+)?/g);
+      return m && m.length >= 2 ? [parseFloat(m[0].replace(',', '.')), parseFloat(m[1].replace(',', '.'))] : null;
+    };
+    const A = ll(p[1]), B = ll(p[2]);
+    if (!A || !B) return;
+    T.push({n: p[0] || 'Trecho ' + (T.length + 1), A, B, lim: +p[3] || 60, off: +p[4] || 0});
+    n++;
+  });
+  save(); drawT(); $('imp').value = '';
+  alert(`${n} trecho(s) importado(s)!`);
+};
+
+drawT();
+if (T.length) map.fitBounds(T.flatMap(t => [t.A, t.B]), {padding: [70, 70]});
+render(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "radar-velocidade-media",
+  "version": "1.0.0",
+  "private": true,
+  "description": "App PWA de monitoramento de trechos com radar de velocidade média com integração Waze e Google Maps.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "radar",
+    "velocidade-media",
+    "waze",
+    "google-maps",
+    "gps",
+    "pwa"
+  ],
+  "author": "Fernando Carmo",
+  "license": "MIT"
+}
