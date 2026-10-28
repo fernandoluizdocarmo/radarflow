@@ -1,8 +1,8 @@
 {
-  "name": "radar-velocidade-media",
-  "version": "1.0.0",
+  "name": "radarflow",
+  "version": "1.1.0",
   "private": true,
-  "description": "App PWA de monitoramento de trechos com radar de velocidade média com integração Waze e Google Maps.",
+  "description": "RadarFlow: Copiloto em tempo real para monitoramento de radares de velocidade média com overlay para Waze e Google Maps.",
   "scripts": {
     "start": "node server.js"
   },

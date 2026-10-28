@@ -1,12 +1,12 @@
 {
-  "name": "Radar de Velocidade Média",
-  "short_name": "RadarMédia",
-  "description": "Monitoramento em tempo real de trechos com radar de velocidade média.",
+  "name": "RadarFlow - Velocidade Média",
+  "short_name": "RadarFlow",
+  "description": "Copiloto inteligente para monitoramento em tempo real de velocidade média com overlay para Waze e Google Maps.",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#17212b",
-  "theme_color": "#17212b",
+  "background_color": "#0b1118",
+  "theme_color": "#0b1118",
   "icons": [
     {
       "src": "icon.svg",

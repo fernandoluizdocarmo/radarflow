@@ -1,6 +1,9 @@
-# 🛰️ Radar de Velocidade Média (PWA + Integração Waze & Maps)
+# ⚡ RadarFlow · Copiloto de Velocidade Média
 
-Aplicativo web progressivo (PWA) e móvel desenvolvido para motoristas monitorarem em tempo real trechos fiscalizados por **radares de velocidade média**, com suporte a janela flutuante sobre o Waze e Google Maps, alertas por voz em português e cálculo contínuo da velocidade restante permitida.
+<div align="center">
+  <img src="icon.svg" width="140" height="140" alt="RadarFlow Icon" />
+  <p><strong>Monitoramento inteligente de trechos com radar de velocidade média, integração Waze & Maps e Janela Flutuante (Picture-in-Picture).</strong></p>
+</div>
 
 ---
 
