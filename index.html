@@ -4,675 +4,474 @@
 <meta charset="utf-8">
 <title>RadarFlow · Velocidade Média</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<meta name="theme-color" content="#12171c">
+<meta name="theme-color" content="#0a0f16">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
-<link rel="apple-touch-icon" href="icon.svg">
-
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{
-  --bg:#0e1318;
-  --card:#182028;
-  --card-sub:#222c37;
-  --ink:#ffffff;
-  --mut:#8c9ba8;
-  --line:#2c3845;
-  --blue:#2a6df4;
-  --blue-hover:#1c59d6;
-  --waze:#00d6fe;
-  --maps:#34a853;
-  --sign:#ffc20e;
-  --ok:#2ecc71;
-  --bad:#ff4757;
-  --warn:#ffa502;
-  --hud-bg:rgba(20, 27, 34, 0.95);
-  --safe-bottom:env(safe-area-inset-bottom, 10px);
-  --safe-top:env(safe-area-inset-top, 10px);
-}
+:root{--bg:#0e1318;--card:#182028;--card2:#222c37;--ink:#fff;--mut:#8c9ba8;--line:#2c3845;--blue:#2a6df4;--waze:#00d6fe;--maps:#34a853;--sign:#ffc20e;--ok:#2ecc71;--bad:#ff4757;--warn:#ffa502;--glass:rgba(20,27,34,.95);--safe-b:env(safe-area-inset-bottom,10px);--safe-t:env(safe-area-inset-top,10px)}
 *{box-sizing:border-box}
-html,body{height:100%;margin:0;padding:0;background:var(--bg);color:var(--ink);font:500 15px/1.4 Barlow,system-ui,-apple-system,sans-serif;-webkit-tap-highlight-color:transparent;overflow:hidden}
-
-#app-container{position:relative;width:100%;height:100%;display:flex;flex-direction:column}
+html,body{height:100%;margin:0;padding:0;background:var(--bg);color:var(--ink);font:500 15px/1.4 Barlow,system-ui,sans-serif;-webkit-tap-highlight-color:transparent;overflow:hidden}
 #map{position:absolute;inset:0;z-index:1}
 
-/* HUD Superior em Condução */
-.hud{
-  position:absolute;z-index:500;left:12px;right:12px;top:calc(8px + var(--safe-top));
-  background:var(--hud-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  border-radius:16px;padding:12px 14px;box-shadow:0 8px 30px rgba(0,0,0,0.45);
-  border:1px solid var(--line);border-left:7px solid var(--sign);
-  transition:all .25s ease;
-}
-.hud[data-s=ok]{border-left-color:var(--ok)}
-.hud[data-s=bad]{border-left-color:var(--bad)}
-.hud[data-s=warn]{border-left-color:var(--warn)}
-
+/* === HUD === */
+.hud{position:absolute;z-index:500;left:12px;right:12px;top:calc(8px + var(--safe-t));background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:16px;padding:12px 14px;box-shadow:0 8px 30px rgba(0,0,0,.45);border:1px solid var(--line);border-left:7px solid var(--sign);transition:border-color .2s}
+.hud[data-s=ok]{border-left-color:var(--ok)}.hud[data-s=bad]{border-left-color:var(--bad)}.hud[data-s=warn]{border-left-color:var(--warn)}
 .hud-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-.hud-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:65%}
-.hud-tools{display:flex;gap:6px}
-.tool-btn{
-  background:var(--card-sub);border:1px solid var(--line);border-radius:20px;
-  color:var(--ink);font-size:12px;font-weight:600;padding:4px 9px;cursor:pointer;
-  display:inline-flex;align-items:center;gap:4px;min-height:30px;
-}
+.hud-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:48%}
+.hud-tools{display:flex;gap:5px;align-items:center}
+.tool-btn{background:var(--card2);border:1px solid var(--line);border-radius:20px;color:var(--ink);font-size:11px;font-weight:600;padding:4px 8px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;min-height:28px}
 .tool-btn.active{background:var(--blue);border-color:var(--blue);color:#fff}
-
-.speed-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:baseline}
-.speed-box{display:grid}
-.speed-box small{font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:0.5px}
-.speed-val{font:700 48px/0.95 "Barlow Condensed",Impact,sans-serif;font-variant-numeric:tabular-nums}
-.hud[data-s=ok] #avg{color:var(--ok)}
-.hud[data-s=bad] #avg{color:var(--bad)}
-.hud[data-s=warn] #avg{color:var(--warn)}
-
-.prog-track{width:100%;height:5px;background:var(--line);border-radius:3px;margin:10px 0 6px;overflow:hidden;display:none}
+.speed-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.speed-box small{font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
+.speed-val{font:700 46px/.95 "Barlow Condensed",Impact,sans-serif;font-variant-numeric:tabular-nums}
+.hud[data-s=ok] #avg{color:var(--ok)}.hud[data-s=bad] #avg{color:var(--bad)}.hud[data-s=warn] #avg{color:var(--warn)}
+.prog-track{width:100%;height:5px;background:var(--line);border-radius:3px;margin:8px 0 4px;overflow:hidden;display:none}
 .prog-fill{height:100%;background:var(--blue);width:0%;transition:width .2s}
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
+.stat-box small{font-size:10px;color:var(--mut);text-transform:uppercase}
+.stat-box b{font:700 17px/1.2 "Barlow Condensed",Impact,sans-serif}
+#st{margin:4px 0 0;font-size:12px;color:var(--mut);line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
-.stat-box{display:grid}
-.stat-box small{font-size:10.5px;color:var(--mut);text-transform:uppercase}
-.stat-box b{font:700 18px/1.2 "Barlow Condensed",Impact,sans-serif}
+/* Floating GPS button */
+.map-gps-btn{position:absolute;right:14px;bottom:calc(68px + var(--safe-b));z-index:550;background:var(--card);border:1px solid var(--line);color:#fff;width:44px;height:44px;border-radius:50%;font-size:18px;box-shadow:0 4px 14px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.map-gps-btn:active{transform:scale(0.92);background:var(--card2)}
 
-#st{margin:6px 0 0;font-size:12px;color:var(--mut);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
-/* Painel Flutuante / Bottom Sheets */
-.tab-content{
-  position:absolute;z-index:600;left:0;right:0;bottom:calc(66px + var(--safe-bottom));
-  background:var(--hud-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-  border-top-left-radius:24px;border-top-right-radius:24px;
-  border:1px solid var(--line);border-bottom:none;
-  box-shadow:0 -10px 35px rgba(0,0,0,0.5);
-  max-height:68vh;overflow-y:auto;display:none;padding:16px 16px 20px;
-}
+/* === Painéis === */
+.tab-content{position:absolute;z-index:600;left:0;right:0;bottom:calc(62px + var(--safe-b));background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top-left-radius:24px;border-top-right-radius:24px;border:1px solid var(--line);border-bottom:none;box-shadow:0 -10px 35px rgba(0,0,0,.5);max-height:72vh;overflow-y:auto;display:none;padding:16px 16px 20px}
 .tab-content.active{display:block;animation:slideUp .25s ease-out}
-
-@keyframes slideUp{
-  from{transform:translateY(30px);opacity:0}
-  to{transform:translateY(0);opacity:1}
-}
-
+@keyframes slideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
 .panel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-.panel-title{font-size:18px;font-weight:700;letter-spacing:-0.2px}
-.close-btn{background:transparent;border:none;color:var(--mut);font-size:22px;cursor:pointer;padding:0 6px}
+.panel-title{font-size:18px;font-weight:700}
+.close-btn{background:none;border:none;color:var(--mut);font-size:22px;cursor:pointer;padding:0 6px}
 
-/* Inputs e Formulários */
+/* === Formulários === */
 .field{display:grid;gap:6px;margin-bottom:12px}
 .field label{font-size:12px;font-weight:600;text-transform:uppercase;color:var(--mut);display:flex;justify-content:space-between}
-.input-with-action{display:flex;gap:6px}
-input,select,textarea{
-  background:var(--card);border:1px solid var(--line);border-radius:12px;
-  color:#fff;padding:10px 12px;font-size:15px;width:100%;min-height:44px;outline:none;
-}
-input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(42,109,244,0.3)}
+.input-row{display:flex;gap:6px}
+input,select,textarea{background:var(--card);border:1px solid var(--line);border-radius:12px;color:#fff;padding:10px 12px;font-size:15px;width:100%;min-height:44px;outline:none;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(42,109,244,.3)}
 button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.btn-icon{background:var(--card2);border:1px solid var(--line);border-radius:12px;color:var(--ink);padding:0 12px;min-height:44px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.btn-primary{background:var(--blue);color:#fff;border:none;border-radius:12px;font-weight:600;padding:12px;min-height:46px;width:100%;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-primary:active{opacity:.85}
+.btn-secondary{background:var(--card2);color:var(--ink);border:1px solid var(--line);border-radius:12px;font-weight:600;padding:12px;min-height:46px;width:100%;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px}
+.nav-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.btn-waze{background:#00d6fe;color:#053540;border:none;border-radius:12px;font-weight:700;padding:12px;min-height:46px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px}
+.btn-maps{background:#34a853;color:#fff;border:none;border-radius:12px;font-weight:700;padding:12px;min-height:46px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px}
 
-.btn-icon{
-  background:var(--card-sub);border:1px solid var(--line);border-radius:12px;
-  color:var(--ink);padding:0 12px;min-height:44px;display:flex;align-items:center;justify-content:center;
-}
-.btn-primary{
-  background:var(--blue);color:#fff;border:none;border-radius:12px;
-  font-weight:600;padding:12px;min-height:46px;width:100%;font-size:15px;
-  display:flex;align-items:center;justify-content:center;gap:8px;
-}
-.btn-primary:active{background:var(--blue-hover)}
+/* Quick destination chips */
+.quick-chip{background:var(--card2);border:1px solid var(--line);border-radius:20px;color:var(--ink);font-size:12px;font-weight:600;padding:6px 12px;white-space:nowrap}
+.quick-chip:active{background:var(--blue)}
 
-.quick-nav{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-.btn-waze{
-  background:#00d6fe;color:#053540;border:none;border-radius:12px;
-  font-weight:700;padding:12px;min-height:46px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;
-}
-.btn-maps{
-  background:#34a853;color:#ffffff;border:none;border-radius:12px;
-  font-weight:700;padding:12px;min-height:46px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;
-}
-
-/* Sugestões de Endereço */
-.suggestions{
-  background:var(--card);border:1px solid var(--line);border-radius:12px;
-  margin-top:-6px;margin-bottom:10px;max-height:180px;overflow-y:auto;display:none;
-}
-.sugg-item{
-  padding:10px 12px;font-size:13.5px;border-bottom:1px solid var(--line);
-  cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
+/* === Sugestões === */
+.suggestions{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-top:-4px;margin-bottom:8px;max-height:180px;overflow-y:auto;display:none}
+.sugg-item{padding:10px 12px;font-size:13.5px;border-bottom:1px solid var(--line);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sugg-item:last-child{border-bottom:none}
-.sugg-item:active{background:var(--card-sub)}
+.sugg-item:active{background:var(--card2)}
 
-/* Barra Inferior de Abas (Mobile Bottom Bar) */
-.bottom-bar{
-  position:absolute;z-index:700;left:0;right:0;bottom:0;
-  height:calc(60px + var(--safe-bottom));padding-bottom:var(--safe-bottom);
-  background:rgba(18, 24, 30, 0.96);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-  border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4, 1fr);align-items:center;
-}
-.tab-btn{
-  background:none;border:none;color:var(--mut);padding:6px 0;
-  display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;
-  transition:all .15s ease;
-}
+/* === Bottom Bar === */
+.bottom-bar{position:absolute;z-index:700;left:0;right:0;bottom:0;height:calc(58px + var(--safe-b));padding-bottom:var(--safe-b);background:rgba(14,19,24,.97);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);align-items:center}
+.tab-btn{background:none;border:none;color:var(--mut);padding:6px 0;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;font-weight:600;transition:color .15s}
 .tab-btn span.icon{font-size:20px;line-height:1}
 .tab-btn.active{color:var(--blue)}
-.tab-btn.active span.icon{transform:scale(1.15)}
 
-/* Trechos Cadastrados */
-.radar-card{
-  background:var(--card);border:1px solid var(--line);border-radius:14px;
-  padding:12px;margin-bottom:10px;display:grid;gap:8px;
-}
-.radar-card-top{display:flex;justify-content:space-between;align-items:center}
-.radar-name{font-weight:700;font-size:15px}
-.radar-limit{
-  background:#ffc20e;color:#17212b;font-weight:700;font-size:13px;
-  border-radius:20px;padding:2px 8px;font-family:"Barlow Condensed",Impact,sans-serif;
-}
-.radar-card-actions{display:flex;gap:6px;justify-content:flex-end}
-.radar-btn-sm{
-  background:var(--card-sub);border:1px solid var(--line);border-radius:8px;
-  padding:6px 10px;font-size:12px;font-weight:600;color:var(--ink);
-}
+/* === Radar Cards === */
+.radar-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
+.radar-card-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.radar-name{font-weight:700;font-size:14px}
+.radar-limit{background:#ffc20e;color:#17212b;font-weight:700;font-size:13px;border-radius:20px;padding:2px 8px;font-family:"Barlow Condensed",sans-serif}
+.radar-card-actions{display:flex;gap:6px}
+.radar-btn-sm{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;color:var(--ink)}
 
-/* Canvas PiP oculto */
+/* === Modal === */
+.modal-overlay{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:20px}
+.modal-box{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px;max-width:380px;width:100%;box-shadow:0 12px 36px rgba(0,0,0,.5)}
+
+/* === PiP === */
 #pipCanvas{display:none}
-#pipVideo{position:fixed;width:1px;height:1px;opacity:0.01;pointer-events:none}
+#pipVideo{position:fixed;width:1px;height:1px;opacity:.01;pointer-events:none}
+.leaflet-tooltip{font-weight:600;border-radius:6px}
 </style>
 </head>
 <body>
 
-<div id="app-container">
-  <!-- Mapa Fundo -->
-  <div id="map"></div>
+<div id="map"></div>
 
-  <!-- HUD Principal Superior (Visualizador da Direção) -->
-  <div class="hud" id="hud" data-s="ok">
-    <div class="hud-head">
-      <div class="hud-title" id="radarName">RadarFlow</div>
-      <div class="hud-tools">
-        <button class="tool-btn" id="btnInstall" title="Instalar aplicativo na tela inicial" style="background:var(--sign);color:#12171c;border-color:var(--sign);font-weight:700">📲 Instalar</button>
-        <button class="tool-btn active" id="btnAudio" title="Alertas de Som">🔊 Som</button>
-        <button class="tool-btn" id="btnPip" title="Janela Flutuante sobre o Waze">⧉ Flutuante</button>
-      </div>
-    </div>
+<!-- Botão GPS Flutuante no Mapa -->
+<button class="map-gps-btn" id="btnMapGps" title="Centralizar GPS">📍</button>
 
-    <div class="speed-grid">
-      <div class="speed-box">
-        <small>Média no Trecho</small>
-        <div><b class="speed-val" id="avg">0,0</b> <span style="font-size:13px;font-weight:600;color:var(--mut)">km/h</span></div>
-      </div>
-      <div class="speed-box">
-        <small>Velocidade Agora</small>
-        <div><b class="speed-val" id="now">0,0</b> <span style="font-size:13px;font-weight:600;color:var(--mut)">km/h</span></div>
-      </div>
-    </div>
-
-    <div class="prog-track" id="progBar"><div class="prog-fill" id="progFill"></div></div>
-
-    <div class="stat-row">
-      <div class="stat-box"><small>Distância</small><b id="dist">0 m</b></div>
-      <div class="stat-box"><small>Tempo</small><b id="tempo">0:00</b></div>
-      <div class="stat-box"><small>Máx. Restante</small><b id="rest">—</b></div>
-    </div>
-    <p id="st" role="status">GPS desligado. Abra a aba Radar ou clique em Ligar GPS.</p>
-  </div>
-
-  <!-- ABA 1: ROTA & DESTINO (Digitar Endereços e Integrar ao Waze/Maps) -->
-  <div class="tab-content" id="tabRoute">
-    <div class="panel-header">
-      <div class="panel-title">📍 Para Onde Você Vai?</div>
-      <button class="close-btn" onclick="switchTab(null)">✕</button>
-    </div>
-
-    <!-- Ponto Inicial com detecção automática -->
-    <div class="field">
-      <label>
-        <span>Origem (Partida)</span>
-        <span style="color:var(--ok);font-size:11px">● GPS Automático</span>
-      </label>
-      <div class="input-with-action">
-        <input id="addrOrigin" type="text" placeholder="Detectando sua localização..." value="📍 Minha Localização Atual">
-        <button class="btn-icon" id="searchOriginBtn" title="Buscar outra origem">🔍</button>
-      </div>
-      <div class="suggestions" id="originSuggestions"></div>
-    </div>
-
-    <!-- Endereço Onde Vou (Destino) -->
-    <div class="field">
-      <label><span>Endereço de Destino</span></label>
-      <div class="input-with-action">
-        <input id="addrDest" type="text" placeholder="Digite endereço, rodovia ou local..." autocomplete="off">
-        <button class="btn-icon" id="searchDestBtn" title="Buscar Destino">🔍</button>
-      </div>
-      <div class="suggestions" id="destSuggestions"></div>
-    </div>
-
-    <!-- Botões Grandes de Navegação Imediata -->
-    <div style="margin-top:10px">
-      <div style="font-size:11.5px;font-weight:700;text-transform:uppercase;color:var(--mut);margin-bottom:8px">
-        Iniciar com RadarFlow e Alertas Ativos:
-      </div>
-      <div class="quick-nav" style="margin-top:0">
-        <button class="btn-waze" id="btnNavWaze">🚙 Iniciar no Waze</button>
-        <button class="btn-maps" id="btnNavMaps">🗺️ Google Maps</button>
-      </div>
-    </div>
-
-    <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
-      <button class="btn-primary" id="btnCalculateRoute" style="background:var(--card-sub);border:1px solid var(--line);font-size:13.5px">
-        <span>🚗 Apenas Simular Trajeto no Mapa</span>
-      </button>
-    </div>
-
-    <div id="routeInfo" style="margin-top:10px;font-size:13px;color:var(--mut);display:none">
-      <b style="color:var(--ink)" id="routeDistTime">—</b>
-      <div id="routeRadarsAlert" style="margin-top:4px;color:var(--sign)"></div>
+<!-- HUD PRINCIPAL -->
+<div class="hud" id="hud" data-s="">
+  <div class="hud-head">
+    <div class="hud-title" id="radarName">RadarFlow</div>
+    <div class="hud-tools">
+      <button class="tool-btn" id="btnSimQuick" style="background:var(--blue);color:#fff;border-color:var(--blue);font-weight:700">▶ Simular</button>
+      <button class="tool-btn active" id="btnAudio" title="Som de Alertas">🔊</button>
+      <button class="tool-btn" id="btnPip" title="Janela Flutuante (PiP)">⧉</button>
+      <button class="tool-btn" id="btnInstall" style="background:var(--sign);color:#12171c;border-color:var(--sign);font-weight:700" title="Instalar App">📲</button>
     </div>
   </div>
-
-  <!-- ABA 2: RADAR & CONTROLES -->
-  <div class="tab-content" id="tabRadar">
-    <div class="panel-header">
-      <div class="panel-title">🧭 Controles de Condução</div>
-      <button class="close-btn" onclick="switchTab(null)">✕</button>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-      <button id="gps" class="btn-primary" style="background:#1b7a4b">Ligar GPS</button>
-      <button id="seg" class="btn-primary" style="background:var(--card-sub);border:1px solid var(--line)" aria-pressed="true">Centralizar</button>
-    </div>
-    <button id="addNewSectionMap" class="btn-primary" style="background:var(--card-sub);border:1px solid var(--line);margin-bottom:12px">
-      + Marcar Trecho Manualmente no Mapa
-    </button>
-    <div style="font-size:13px;color:var(--mut);line-height:1.4">
-      💡 <b>Dica no Celular:</b> Ative o GPS e clique em <b>"⧉ Flutuante"</b> para exibir a velocidade média em janela sobre o Waze!
-    </div>
+  <div class="speed-grid">
+    <div class="speed-box"><small>Média no Trecho</small><div><b class="speed-val" id="avg">0,0</b> <span style="font-size:12px;color:var(--mut)">km/h</span></div></div>
+    <div class="speed-box"><small>Velocidade Agora</small><div><b class="speed-val" id="now">0,0</b> <span style="font-size:12px;color:var(--mut)">km/h</span></div></div>
   </div>
-
-  <!-- ABA 3: TRECHOS DE RADAR SALVOS -->
-  <div class="tab-content" id="tabSections">
-    <div class="panel-header">
-      <div class="panel-title">📋 Radares de Média</div>
-      <button class="close-btn" onclick="switchTab(null)">✕</button>
-    </div>
-    <div id="list"></div>
-    <button class="btn-primary" id="btnExport" style="background:var(--card-sub);border:1px solid var(--line);margin-top:8px">
-      📋 Copiar Lista de Radares
-    </button>
+  <div class="prog-track" id="progBar"><div class="prog-fill" id="progFill"></div></div>
+  <div class="stat-row">
+    <div class="stat-box"><small>Distância</small><b id="dist">0 m</b></div>
+    <div class="stat-box"><small>Tempo</small><b id="tempo">0:00</b></div>
+    <div class="stat-box"><small>Máx. Restante</small><b id="rest">—</b></div>
   </div>
+  <p id="st" role="status">Carregando…</p>
+</div>
 
-  <!-- ABA 4: AJUSTES & SIMULAÇÃO -->
-  <div class="tab-content" id="tabSettings">
-    <div class="panel-header">
-      <div class="panel-title">⚙️ Ajustes & Simulação</div>
-      <button class="close-btn" onclick="switchTab(null)">✕</button>
-    </div>
-    <div class="field">
-      <label>Trecho para Simular</label>
-      <select id="selT"></select>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-      <div class="field">
-        <label>Km/h Simulação</label>
-        <input id="simv" type="number" inputmode="numeric" value="85">
-      </div>
-      <div class="field">
-        <label>Raio de Detecção (m)</label>
-        <input id="raio" type="number" inputmode="numeric" value="40">
-      </div>
-    </div>
-    <button class="btn-primary" id="sim" style="margin-bottom:12px">▶️ Testar Simulação</button>
-    
-    <details style="margin-top:14px">
-      <summary style="cursor:pointer;color:var(--mut);font-size:13px;font-weight:600">📥 Importar Radares em Texto</summary>
-      <textarea id="imp" style="margin-top:8px;min-height:80px" placeholder="Nome; Lat A, Lon A; Lat B, Lon B; Limite; Dist m"></textarea>
-      <button class="btn-primary" id="doImp" style="margin-top:8px">Importar</button>
-    </details>
+<!-- ABA TRAJETO -->
+<div class="tab-content" id="tabRoute">
+  <div class="panel-header"><div class="panel-title">📍 Para Onde Você Vai?</div><button class="close-btn" onclick="switchTab(null)">✕</button></div>
+  <div class="field">
+    <label><span>Origem</span><span style="color:var(--ok);font-size:11px" id="gpsStatus">● GPS Automático</span></label>
+    <div class="input-row"><input id="addrOrigin" type="text" placeholder="Detectando localização…" readonly><button class="btn-icon" id="btnResetOrigin">📍</button></div>
   </div>
-
-  <!-- BARRA INFERIOR DE ABAS (Mobile First Bottom Bar) -->
-  <div class="bottom-bar">
-    <button class="tab-btn active" id="tabBtnDriving" onclick="switchTab(null)">
-      <span class="icon">🧭</span>
-      <span>Radar</span>
-    </button>
-    <button class="tab-btn" id="tabBtnRoute" onclick="switchTab('tabRoute')">
-      <span class="icon">📍</span>
-      <span>Trajeto</span>
-    </button>
-    <button class="tab-btn" id="tabBtnSections" onclick="switchTab('tabSections')">
-      <span class="icon">📋</span>
-      <span>Trechos</span>
-    </button>
-    <button class="tab-btn" id="tabBtnSettings" onclick="switchTab('tabSettings')">
-      <span class="icon">⚙️</span>
-      <span>Ajustes</span>
-    </button>
+  <div class="field">
+    <label><span>Endereço de Destino</span></label>
+    <div class="input-row"><input id="addrDest" type="text" placeholder="Digite endereço, rodovia ou local…" autocomplete="off"><button class="btn-icon" id="searchDestBtn">🔍 Buscar</button></div>
+    <div class="suggestions" id="destSuggestions"></div>
+  </div>
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--mut);margin-bottom:6px">Destinos de Teste Rápido:</div>
+  <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:8px">
+    <button type="button" class="quick-chip" onclick="quickFillDest('Rodovia dos Imigrantes, SP')">🛣️ Rod. Imigrantes</button>
+    <button type="button" class="quick-chip" onclick="quickFillDest('Sete Lagoas, MG')">🛣️ BR-040 Demo</button>
+    <button type="button" class="quick-chip" onclick="quickFillDest('Avenida Paulista, São Paulo')">🏙️ Av. Paulista</button>
+  </div>
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--mut);margin-bottom:8px">Navegar com RadarFlow Ativo:</div>
+  <div class="nav-grid" style="margin-top:0">
+    <button class="btn-waze" id="btnNavWaze">🚙 Waze</button>
+    <button class="btn-maps" id="btnNavMaps">🗺️ Google Maps</button>
+  </div>
+  <button class="btn-secondary" id="btnCalculateRoute" style="margin-top:12px">🚗 Traçar e Simular Trajeto no Mapa</button>
+  <div id="routeInfo" style="margin-top:10px;font-size:13px;color:var(--mut);display:none">
+    <b style="color:var(--ink)" id="routeDistTime">—</b>
+    <div id="routeRadarsAlert" style="margin-top:4px;color:var(--sign)"></div>
   </div>
 </div>
 
-<!-- Modal de Ajuda de Instalação PWA -->
-<div id="installModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:20px">
-  <div style="background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px;max-width:380px;width:100%;box-shadow:0 12px 36px rgba(0,0,0,0.5)">
+<!-- ABA CONTROLES -->
+<div class="tab-content" id="tabRadar">
+  <div class="panel-header"><div class="panel-title">🧭 Controles de Radar</div><button class="close-btn" onclick="switchTab(null)">✕</button></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+    <button id="gps" class="btn-primary" style="background:#1b7a4b">▶ Ligar GPS</button>
+    <button id="seg" class="btn-secondary" aria-pressed="true">📌 Centralizar</button>
+  </div>
+  <button id="addNewSectionMap" class="btn-secondary" style="margin-bottom:12px">+ Marcar Trecho no Mapa</button>
+  <div style="font-size:13px;color:var(--mut);line-height:1.5">💡 Ative o GPS e toque em <b>⧉</b> no topo para usar a janela flutuante sobre o Waze ou Google Maps.</div>
+</div>
+
+<!-- ABA TRECHOS -->
+<div class="tab-content" id="tabSections">
+  <div class="panel-header"><div class="panel-title">📋 Radares Cadastrados</div><button class="close-btn" onclick="switchTab(null)">✕</button></div>
+  <div id="list"></div>
+  <button class="btn-secondary" id="btnExport" style="margin-top:8px">📋 Copiar Lista de Radares</button>
+</div>
+
+<!-- ABA AJUSTES -->
+<div class="tab-content" id="tabSettings">
+  <div class="panel-header"><div class="panel-title">⚙️ Ajustes & Simulação</div><button class="close-btn" onclick="switchTab(null)">✕</button></div>
+  <div class="field"><label>Trecho para Simulação</label><select id="selT"></select></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+    <div class="field"><label>Km/h Simulação</label><input id="simv" type="number" inputmode="numeric" value="85"></div>
+    <div class="field"><label>Raio Detecção (m)</label><input id="raio" type="number" inputmode="numeric" value="40"></div>
+  </div>
+  <button class="btn-primary" id="sim" style="margin-bottom:12px">▶️ Iniciar Simulação do Trecho</button>
+  <button class="btn-secondary" id="clrAll" style="margin-bottom:12px;color:var(--bad)">🗑 Apagar Todos os Trechos</button>
+  <details style="margin-top:8px">
+    <summary style="cursor:pointer;color:var(--mut);font-size:13px;font-weight:600">📥 Importar Radares</summary>
+    <textarea id="imp" style="margin-top:8px;min-height:80px" placeholder="Nome; Lat A, Lon A; Lat B, Lon B; Limite; Dist m"></textarea>
+    <button class="btn-primary" id="doImp" style="margin-top:8px">Importar</button>
+  </details>
+</div>
+
+<!-- BOTTOM BAR -->
+<div class="bottom-bar">
+  <button class="tab-btn active" id="tabBtnDriving" onclick="switchTab(activeTab === 'tabRadar' ? null : 'tabRadar')"><span class="icon">🧭</span><span>Radar</span></button>
+  <button class="tab-btn" id="tabBtnRoute" onclick="switchTab('tabRoute')"><span class="icon">📍</span><span>Trajeto</span></button>
+  <button class="tab-btn" id="tabBtnSections" onclick="switchTab('tabSections')"><span class="icon">📋</span><span>Trechos</span></button>
+  <button class="tab-btn" id="tabBtnSettings" onclick="switchTab('tabSettings')"><span class="icon">⚙️</span><span>Ajustes</span></button>
+</div>
+
+<!-- MODAL INSTALAÇÃO -->
+<div class="modal-overlay" id="installModal">
+  <div class="modal-box">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div style="font-size:18px;font-weight:700">📲 Instalar o RadarFlow</div>
-      <button style="background:none;border:none;color:var(--mut);font-size:22px;cursor:pointer" onclick="$('installModal').style.display='none'">✕</button>
+      <div style="font-size:18px;font-weight:700">📲 Instalar RadarFlow</div>
+      <button class="close-btn" onclick="document.getElementById('installModal').style.display='none'">✕</button>
     </div>
     <div id="installModalContent" style="font-size:14px;color:var(--mut);line-height:1.5"></div>
-    <button class="btn-primary" style="margin-top:16px" onclick="$('installModal').style.display='none'">Entendi</button>
+    <button class="btn-primary" style="margin-top:16px" onclick="document.getElementById('installModal').style.display='none'">Entendi</button>
   </div>
 </div>
 
-<!-- Canvas PiP para Overlay sobre o Waze -->
+<!-- PIP -->
 <canvas id="pipCanvas" width="400" height="240"></canvas>
 <video id="pipVideo" autoplay muted playsinline></video>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
+// ======================================================================
+// SERVICE WORKER & LIMPEZA DE CACHE ANTIGO
+// ======================================================================
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    reg.update();
+  }).catch(() => {});
+  if ('caches' in window) {
+    caches.keys().then(keys => {
+      keys.forEach(k => {
+        if (k !== 'radarflow-v4') caches.delete(k);
+      });
+    });
+  }
 }
 
+// ======================================================================
+// UTILITÁRIOS
+// ======================================================================
 const $ = id => document.getElementById(id);
+const R = 6371000, DEG = Math.PI / 180;
 
-// Gerenciamento de Instalação PWA (Botão 📲 Instalar)
-let deferredPrompt = null;
-const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-
-if (isStandalone) {
-  $('btnInstall').style.display = 'none'; // Já está instalado como app nativo!
+function hav(a, b) {
+  const dx = (b[0] - a[0]) * DEG, dy = (b[1] - a[1]) * DEG;
+  const h = Math.sin(dx / 2) ** 2 + Math.cos(a[0] * DEG) * Math.cos(b[0] * DEG) * (Math.sin(dy / 2) ** 2);
+  return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  deferredPrompt = e;
-  if (!isStandalone) $('btnInstall').style.display = 'inline-flex';
-});
+const f1 = n => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const fmtT = ms => { const s = Math.round((ms || 0) / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const getRadio = () => +$('raio').value || 40;
 
-$('btnInstall').onclick = async () => {
-  if (deferredPrompt) {
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      $('btnInstall').style.display = 'none';
-      setSt('RadarFlow adicionado à sua tela inicial!');
-    }
-    deferredPrompt = null;
-  } else {
-    const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
-    const modal = $('installModal');
-    const content = $('installModalContent');
-    if (isIos) {
-      content.innerHTML = `
-        Para instalar no seu <b>iPhone (Safari)</b>:<br><br>
-        1. Toque no botão <b>Compartilhar</b> (ícone com quadrado e seta para cima <span style="font-size:18px">⎋</span> na barra inferior do navegador).<br><br>
-        2. Role as opções e selecione <b>"Adicionar à Tela de Início"</b> 📲.<br><br>
-        3. Toque em <b>Adicionar</b>. O RadarFlow abrirá em tela cheia como um app nativo!
-      `;
-    } else {
-      content.innerHTML = `
-        Para instalar no <b>Android / Chrome / Edge</b>:<br><br>
-        1. Toque nos <b>3 pontinhos (⋮)</b> no topo direito do navegador.<br><br>
-        2. Selecione <b>"Instalar aplicativo"</b> ou <b>"Adicionar à tela inicial"</b> 📲.<br><br>
-        3. Confirme para ter o app disponível direto no seu celular.
-      `;
-    }
-    modal.style.display = 'flex';
-  }
-};
-
-window.addEventListener('appinstalled', () => {
-  $('btnInstall').style.display = 'none';
-  setSt('RadarFlow instalado como aplicativo!');
-});
-const R = 6371000, rad = Math.PI / 180;
-
-const hav = (a, b) => {
-  const x = (b[0] - a[0]) * rad, y = (b[1] - a[1]) * rad;
-  const h = Math.sin(x / 2) ** 2 + Math.cos(a[0] * rad) * Math.cos(b[0] * rad) * (Math.sin(y / 2) ** 2);
-  return 2 * R * Math.asin(Math.sqrt(h));
-};
-
-const f1 = n => n.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1});
-const fmtT = ms => {
-  const s = Math.round(ms / 1000);
-  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-};
-const raio = () => +$('raio').value || 40;
-
-// Base inicial
-const INITIAL_DEMO = [
-  {
-    n: "Trecho Demonstração (SP/MG)",
-    A: [-19.6201, -44.0402],
-    B: [-19.6350, -44.0311],
-    lim: 60,
-    off: 1850
-  }
+// ======================================================================
+// DADOS
+// ======================================================================
+const DEMO_SECTIONS = [
+  { n: "BR-040 Demo (Sete Lagoas)", A: [-19.6201, -44.0402], B: [-19.6350, -44.0311], lim: 60, off: 1850 },
+  { n: "Rod. Imigrantes Demo", A: [-23.7050, -46.5650], B: [-23.7250, -46.5480], lim: 80, off: 2600 }
 ];
 
 let T = [];
-try {
-  T = JSON.parse(localStorage.getItem('rvm2') || 'null');
-  if (!T || !T.length) T = INITIAL_DEMO;
-} catch(e) { T = INITIAL_DEMO; }
-const save = () => { try { localStorage.setItem('rvm2', JSON.stringify(T)); } catch(e){} };
+try { T = JSON.parse(localStorage.getItem('rvm2') || 'null'); } catch (e) { }
+if (!T || !T.length) T = DEMO_SECTIONS.slice();
+const save = () => { try { localStorage.setItem('rvm2', JSON.stringify(T)); } catch (e) { } };
 
+// Estado
 let me = null, run = null, result = null, block = -1, spd = 0, lastFix = null;
-let sim = null, wid = null, follow = true, adding = null, tick = 0;
+let simTimer = null, gpsWatchId = null, follow = true, adding = null, tick = 0;
 let audioEnabled = true, lastSpoken = 0, lastWarnedTime = 0, wakeLock = null;
+let routeLayer = null, originCoords = null, destCoords = null;
 
-// Rota OSRM
-let routeLayer = null;
-let originCoords = null;
-let destCoords = null;
-
-// Mapa
-const map = L.map('map', {zoomControl: false}).setView([-19.62, -44.04], 13);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19, attribution: '© OpenStreetMap'}).addTo(map);
+// ======================================================================
+// MAPA
+// ======================================================================
+const map = L.map('map', { zoomControl: false }).setView([-19.62, -44.04], 13);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OSM' }).addTo(map);
 const grp = L.layerGroup().addTo(map);
-const trailL = L.polyline([], {color: '#2a6df4', weight: 6, opacity: 0.9}).addTo(map);
-const meM = L.circleMarker([0,0], {radius: 9, color: '#fff', weight: 3, fillColor: '#2a6df4', fillOpacity: 1});
+const trailL = L.polyline([], { color: '#2a6df4', weight: 6, opacity: .9 }).addTo(map);
+const meM = L.circleMarker([0, 0], { radius: 9, color: '#fff', weight: 3, fillColor: '#2a6df4', fillOpacity: 1 });
 
-map.on('dragstart', () => { follow = false; $('seg').style.background = 'var(--card-sub)'; });
+map.on('dragstart', () => { follow = false; });
 
-// Gerenciamento de Abas Móveis
-let activeTabId = null;
+// Botão GPS flutuante no mapa
+$('btnMapGps').onclick = () => {
+  follow = true;
+  if (me) {
+    map.setView(me, 16);
+  } else {
+    startGps();
+  }
+};
+
+// ======================================================================
+// ABAS
+// ======================================================================
+let activeTab = null;
 function switchTab(tabId) {
   ['tabRoute', 'tabRadar', 'tabSections', 'tabSettings'].forEach(id => {
-    $(id).classList.remove('active');
+    const el = $(id);
+    if (el) el.classList.remove('active');
   });
   ['tabBtnDriving', 'tabBtnRoute', 'tabBtnSections', 'tabBtnSettings'].forEach(id => {
-    $(id).classList.remove('active');
+    const el = $(id);
+    if (el) el.classList.remove('active');
   });
 
-  if (tabId && tabId !== activeTabId) {
-    $(tabId).classList.add('active');
-    activeTabId = tabId;
-    if (tabId === 'tabRoute') $('tabBtnRoute').classList.add('active');
-    if (tabId === 'tabSections') $('tabBtnSections').classList.add('active');
-    if (tabId === 'tabSettings') $('tabBtnSettings').classList.add('active');
+  if (tabId && tabId !== activeTab) {
+    const el = $(tabId);
+    if (el) el.classList.add('active');
+    activeTab = tabId;
+    const btnMap = { tabRadar: 'tabBtnDriving', tabRoute: 'tabBtnRoute', tabSections: 'tabBtnSections', tabSettings: 'tabBtnSettings' };
+    if (btnMap[tabId] && $(btnMap[tabId])) $(btnMap[tabId]).classList.add('active');
   } else {
-    activeTabId = null;
+    activeTab = null;
     $('tabBtnDriving').classList.add('active');
   }
 }
 
-// Geocodificação OpenStreetMap Nominatim (Busca de Endereços)
+// ======================================================================
+// BUSCA DE ENDEREÇO (Nominatim)
+// ======================================================================
+let searchTimer = null;
 async function searchAddress(query) {
   if (!query || query.length < 3) return [];
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=br&limit=5`;
   try {
-    const res = await fetch(url);
+    const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&countrycodes=br&limit=5');
+    if (!res.ok) return [];
     return await res.json();
-  } catch(e) {
+  } catch (e) {
+    console.warn('Erro na busca de endereço:', e);
     return [];
   }
 }
 
-function setupAddressSearch(inputId, btnId, suggId, onSelect) {
-  const inp = $(inputId), sugg = $(suggId), btn = $(btnId);
-  let timer = null;
-
-  const doSearch = async () => {
-    const q = inp.value.trim();
-    if (q.length < 3) { sugg.style.display = 'none'; return; }
-    sugg.innerHTML = '<div class="sugg-item" style="color:var(--mut)">Buscando endereço...</div>';
-    sugg.style.display = 'block';
-    const results = await searchAddress(q);
-    if (!results.length) {
-      sugg.innerHTML = '<div class="sugg-item" style="color:var(--mut)">Nenhum endereço encontrado</div>';
-      return;
-    }
-    sugg.innerHTML = results.map((r, i) => `
-      <div class="sugg-item" data-idx="${i}">${r.display_name}</div>
-    `).join('');
-    sugg.querySelectorAll('.sugg-item').forEach((el, i) => {
-      el.onclick = () => {
-        inp.value = results[i].display_name.split(',').slice(0, 3).join(',');
-        sugg.style.display = 'none';
-        onSelect([parseFloat(results[i].lat), parseFloat(results[i].lon)]);
-      };
-    });
-  };
-
-  btn.onclick = doSearch;
-  inp.oninput = () => {
-    clearTimeout(timer);
-    timer = setTimeout(doSearch, 600);
-  };
+async function doDestSearch() {
+  const q = $('addrDest').value.trim();
+  const box = $('destSuggestions');
+  if (q.length < 2) { box.style.display = 'none'; return; }
+  box.innerHTML = '<div class="sugg-item" style="color:var(--mut)">🔍 Buscando endereços…</div>';
+  box.style.display = 'block';
+  const results = await searchAddress(q);
+  if (!results.length) {
+    box.innerHTML = '<div class="sugg-item" style="color:var(--mut)">Nenhum resultado encontrado</div>';
+    return;
+  }
+  box.innerHTML = '';
+  results.forEach(r => {
+    const el = document.createElement('div');
+    el.className = 'sugg-item';
+    el.textContent = r.display_name;
+    el.onclick = () => {
+      $('addrDest').value = r.display_name.split(',').slice(0, 3).join(',').trim();
+      destCoords = [parseFloat(r.lat), parseFloat(r.lon)];
+      box.style.display = 'none';
+      calculateRoute();
+    };
+    box.appendChild(el);
+  });
 }
 
-setupAddressSearch('addrOrigin', 'searchOriginBtn', 'originSuggestions', coords => {
-  originCoords = coords;
-});
+function quickFillDest(addr) {
+  $('addrDest').value = addr;
+  doDestSearch();
+}
 
-setupAddressSearch('addrDest', 'searchDestBtn', 'destSuggestions', coords => {
-  destCoords = coords;
-});
+$('searchDestBtn').onclick = doDestSearch;
+$('addrDest').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); doDestSearch(); } };
+$('addrDest').oninput = () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(doDestSearch, 600);
+};
 
-// Usar Localização Atual como Ponto Inicial
-$('useMyLoc').onclick = () => {
+$('btnResetOrigin').onclick = () => {
   if (me) {
     originCoords = me;
-    $('addrOrigin').value = `Minha Localização (${me[0].toFixed(4)}, ${me[1].toFixed(4)})`;
-    $('originSuggestions').style.display = 'none';
+    $('addrOrigin').value = '📍 Minha Localização';
+    $('gpsStatus').textContent = '● Atualizado';
+    $('gpsStatus').style.color = 'var(--ok)';
   } else {
-    alert('Ative o GPS primeiro ou aguarde a obtenção do sinal.');
-    $('gps').click();
+    startGps();
   }
 };
 
-// Traçar Rota via OSRM
-$('btnCalculateRoute').onclick = async () => {
-  if (!originCoords && me) originCoords = me;
-  if (!originCoords || !destCoords) {
-    alert('Por favor, defina o ponto inicial e o endereço de destino.');
+// ======================================================================
+// ROTA (OSRM)
+// ======================================================================
+async function calculateRoute() {
+  if (!originCoords) {
+    originCoords = me || (T.length ? T[0].A : [-19.6201, -44.0402]);
+  }
+  if (!destCoords) {
+    alert('Digite e selecione um destino na busca.');
     return;
   }
-  const btn = $('btnCalculateRoute');
-  btn.textContent = 'Calculando trajeto...';
+  $('btnCalculateRoute').textContent = 'Calculando Trajeto…';
   try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${originCoords[1]},${originCoords[0]};${destCoords[1]},${destCoords[0]}?overview=full&geometries=geojson`;
+    const url = 'https://router.project-osrm.org/route/v1/driving/' + originCoords[1] + ',' + originCoords[0] + ';' + destCoords[1] + ',' + destCoords[0] + '?overview=full&geometries=geojson';
     const res = await fetch(url);
     const data = await res.json();
     if (data.routes && data.routes.length) {
       const r = data.routes[0];
       const coords = r.geometry.coordinates.map(c => [c[1], c[0]]);
       if (routeLayer) map.removeLayer(routeLayer);
-      routeLayer = L.polyline(coords, {color: '#00d6fe', weight: 6, opacity: 0.85}).addTo(map);
-      map.fitBounds(routeLayer.getBounds(), {padding: [50, 50]});
-
-      const distKm = (r.distance / 1000).toFixed(1);
-      const timeMin = Math.round(r.duration / 60);
+      routeLayer = L.polyline(coords, { color: '#00d6fe', weight: 6, opacity: .85 }).addTo(map);
+      map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
       $('routeInfo').style.display = 'block';
-      $('routeDistTime').textContent = `Trajeto: ${distKm} km · Aproximadamente ${timeMin} min`;
-
-      let radarsOnRoute = 0;
-      T.forEach(radar => {
-        const near = coords.some(pt => hav(pt, radar.A) < 250);
-        if (near) radarsOnRoute++;
-      });
-      $('routeRadarsAlert').textContent = radarsOnRoute > 0
-        ? `⚠️ Atenção: ${radarsOnRoute} radar(es) de velocidade média no trajeto!`
-        : `Nenhum radar de média cadastrado neste trecho até o momento.`;
-
+      $('routeDistTime').textContent = 'Trajeto: ' + (r.distance / 1000).toFixed(1) + ' km · ~' + Math.round(r.duration / 60) + ' min';
+      let onRoute = 0;
+      T.forEach(t => { if (coords.some(pt => hav(pt, t.A) < 300)) onRoute++; });
+      $('routeRadarsAlert').textContent = onRoute > 0 ? '⚠️ ' + onRoute + ' radar(es) de média no trajeto!' : 'Nenhum radar cadastrado neste trecho.';
+      setSt('Trajeto traçado! ' + (r.distance / 1000).toFixed(1) + ' km.');
       switchTab(null);
     }
-  } catch(e) {
-    alert('Não foi possível traçar a rota online.');
-  } finally {
-    btn.textContent = '🚗 Apenas Simular Trajeto no Mapa';
+  } catch (e) {
+    console.warn(e);
+    alert('Erro ao calcular rota. Verifique sua conexão.');
   }
-};
-
-// Navegação direta com 1 Toque (Auto-GPS + Waze / Google Maps)
-function launchNavigation(app) {
-  startGps();
-  const destInput = $('addrDest').value.trim();
-
-  if (app === 'waze') {
-    let url = '';
-    if (destCoords) {
-      url = `https://waze.com/ul?ll=${destCoords[0]},${destCoords[1]}&navigate=yes`;
-    } else if (destInput) {
-      url = `https://waze.com/ul?q=${encodeURIComponent(destInput)}&navigate=yes`;
-    } else if (me) {
-      url = `https://waze.com/ul?ll=${me[0]},${me[1]}&navigate=yes`;
-    } else {
-      url = `https://waze.com/ul?navigate=yes`;
-    }
-    speak('Iniciando navegação no Waze com RadarFlow ativo.');
-    window.open(url, '_blank');
-  } else if (app === 'maps') {
-    let url = '';
-    if (destCoords) {
-      url = `https://www.google.com/maps/dir/?api=1&destination=${destCoords[0]},${destCoords[1]}&travelmode=driving&dir_action=navigate`;
-    } else if (destInput) {
-      url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destInput)}&travelmode=driving&dir_action=navigate`;
-    } else if (me) {
-      url = `https://www.google.com/maps/@${me[0]},${me[1]},16z`;
-    } else {
-      url = `https://www.google.com/maps`;
-    }
-    if (originCoords && (destCoords || destInput)) {
-      url += `&origin=${originCoords[0]},${originCoords[1]}`;
-    }
-    speak('Iniciando navegação no Google Maps com RadarFlow ativo.');
-    window.open(url, '_blank');
-  }
-
-  switchTab(null);
-  setSt(`Navegação aberta no ${app === 'waze' ? 'Waze' : 'Google Maps'}. RadarFlow monitorando.`);
+  $('btnCalculateRoute').textContent = '🚗 Traçar e Simular Trajeto no Mapa';
 }
 
-$('btnNavWaze').onclick = () => launchNavigation('waze');
-$('btnNavMaps').onclick = () => launchNavigation('maps');
+$('btnCalculateRoute').onclick = calculateRoute;
 
-// Áudio e Voz Sintetizada
+// ======================================================================
+// NAVEGAÇÃO WAZE / MAPS
+// ======================================================================
+function launchNav(app) {
+  startGps();
+  const dest = destCoords;
+  const destText = $('addrDest').value.trim();
+  let url = '';
+  if (app === 'waze') {
+    if (dest) url = 'https://waze.com/ul?ll=' + dest[0] + ',' + dest[1] + '&navigate=yes';
+    else if (destText) url = 'https://waze.com/ul?q=' + encodeURIComponent(destText) + '&navigate=yes';
+    else url = 'https://waze.com/ul?navigate=yes';
+  } else {
+    if (dest) url = 'https://www.google.com/maps/dir/?api=1&destination=' + dest[0] + ',' + dest[1] + '&travelmode=driving&dir_action=navigate';
+    else if (destText) url = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(destText) + '&travelmode=driving&dir_action=navigate';
+    else if (me) url = 'https://www.google.com/maps/@' + me[0] + ',' + me[1] + ',16z';
+    else url = 'https://www.google.com/maps';
+  }
+  speak('Navegação ' + (app === 'waze' ? 'Waze' : 'Google Maps') + ' com RadarFlow ativo.');
+  window.open(url, '_blank');
+  switchTab(null);
+  setSt('RadarFlow monitorando velocidade média.');
+}
+
+$('btnNavWaze').onclick = () => launchNav('waze');
+$('btnNavMaps').onclick = () => launchNav('maps');
+
+// ======================================================================
+// ÁUDIO & VOZ
+// ======================================================================
 let audioCtx = null;
-function playBeep(freq = 880, duration = 0.18, count = 1) {
+function playBeep(freq, dur, count) {
   if (!audioEnabled) return;
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    for (let i = 0; i < count; i++) {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.frequency.value = freq;
-      const start = audioCtx.currentTime + i * 0.22;
-      gain.gain.setValueAtTime(0.3, start);
-      gain.gain.exponentialRampToValueAtTime(0.01, start + duration);
-      osc.start(start);
-      osc.stop(start + duration);
+    for (let i = 0; i < (count || 1); i++) {
+      const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.frequency.value = freq || 880;
+      const t = audioCtx.currentTime + i * 0.22;
+      gain.gain.setValueAtTime(0.3, t);
+      gain.gain.exponentialRampToValueAtTime(0.01, t + (dur || 0.18));
+      osc.start(t); osc.stop(t + (dur || 0.18));
     }
-  } catch(e){}
+  } catch (e) { }
 }
 
-function speak(text, priority = false) {
+function speak(text, priority) {
   if (!audioEnabled || !('speechSynthesis' in window)) return;
   const now = Date.now();
   if (!priority && now - lastSpoken < 4000) return;
@@ -680,107 +479,82 @@ function speak(text, priority = false) {
   try {
     window.speechSynthesis.cancel();
     const ut = new SpeechSynthesisUtterance(text);
-    ut.lang = 'pt-BR';
-    ut.rate = 1.05;
+    ut.lang = 'pt-BR'; ut.rate = 1.05;
     window.speechSynthesis.speak(ut);
-  } catch(e){}
+  } catch (e) { }
 }
 
 $('btnAudio').onclick = () => {
   audioEnabled = !audioEnabled;
-  $('btnAudio').textContent = audioEnabled ? '🔊 Som' : '🔇 Mudo';
+  $('btnAudio').textContent = audioEnabled ? '🔊' : '🔇';
   $('btnAudio').classList.toggle('active', audioEnabled);
-  if (audioEnabled) {
-    playBeep(880, 0.1);
-    speak('Alertas sonoros ativados.');
-  }
+  if (audioEnabled) { playBeep(880, 0.1); speak('Alertas de radar ativados.'); }
 };
 
-// Wake Lock
+// ======================================================================
+// WAKE LOCK
+// ======================================================================
 async function requestWakeLock() {
   if ('wakeLock' in navigator && !wakeLock) {
-    try {
-      wakeLock = await navigator.wakeLock.request('screen');
-      wakeLock.addEventListener('release', () => { wakeLock = null; });
-    } catch(e){}
+    try { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } catch (e) { }
   }
 }
 
-// Renderização dos Trechos no Mapa e Lista
+// ======================================================================
+// DESENHAR TRECHOS
+// ======================================================================
 function drawT() {
   grp.clearLayers();
   T.forEach(t => {
-    L.circle(t.A, {radius: raio(), color: '#b88a00', fillColor: '#ffc20e', fillOpacity: .4, weight: 2})
-      .bindTooltip(t.n + ' · Início', {permanent: true, direction: 'top'}).addTo(grp);
-    L.circle(t.B, {radius: raio(), color: '#17212b', fillColor: '#17212b', fillOpacity: .4, weight: 2})
-      .bindTooltip('Fim', {permanent: true, direction: 'top'}).addTo(grp);
-    L.polyline([t.A, t.B], {color: '#17212b', weight: 4, dashArray: '8 6'}).addTo(grp);
+    L.circle(t.A, { radius: getRadio(), color: '#b88a00', fillColor: '#ffc20e', fillOpacity: .4, weight: 2 })
+      .bindTooltip(t.n + ' · A', { permanent: true, direction: 'top' }).addTo(grp);
+    L.circle(t.B, { radius: getRadio(), color: '#333', fillColor: '#555', fillOpacity: .4, weight: 2 })
+      .bindTooltip('B', { permanent: true, direction: 'top' }).addTo(grp);
+    L.polyline([t.A, t.B], { color: '#555', weight: 3, dashArray: '8 6' }).addTo(grp);
   });
 
   $('list').innerHTML = '';
   T.forEach((t, i) => {
-    const d = document.createElement('div');
-    d.className = 'radar-card';
-    d.innerHTML = `
-      <div class="radar-card-top">
-        <div class="radar-name">${t.n}</div>
-        <div class="radar-limit">${t.lim} km/h</div>
-      </div>
-      <div class="radar-card-actions">
-        <button class="radar-btn-sm" title="Ver no Mapa">🗺️ Ver</button>
-        <button class="radar-btn-sm" style="color:var(--waze)" title="Waze">🚙 Waze</button>
-        <button class="radar-btn-sm" style="color:var(--bad)" title="Excluir">✕</button>
-      </div>
-    `;
-    const [bMap, bWz, bDel] = d.querySelectorAll('.radar-btn-sm');
-    bMap.onclick = () => {
-      switchTab(null);
-      follow = false;
-      map.fitBounds([t.A, t.B], {padding: [70, 70]});
-    };
-    bWz.onclick = () => window.open(`https://waze.com/ul?ll=${t.A[0]},${t.A[1]}&navigate=yes`, '_blank');
-    bDel.onclick = () => {
-      if (confirm('Excluir este trecho?')) {
-        T.splice(i, 1); save(); drawT();
-      }
-    };
+    const d = document.createElement('div'); d.className = 'radar-card';
+    d.innerHTML = '<div class="radar-card-top"><div class="radar-name"></div><div class="radar-limit">' + t.lim + ' km/h</div></div><div class="radar-card-actions"><button class="radar-btn-sm btn-view">🗺️ Ver</button><button class="radar-btn-sm btn-sim" style="color:var(--blue)">▶ Simular</button><button class="radar-btn-sm btn-waze" style="color:var(--waze)">🚙 Waze</button><button class="radar-btn-sm btn-del" style="color:var(--bad)">✕</button></div>';
+    d.querySelector('.radar-name').textContent = t.n;
+    d.querySelector('.btn-view').onclick = () => { switchTab(null); follow = false; map.fitBounds([t.A, t.B], { padding: [70, 70] }); };
+    d.querySelector('.btn-sim').onclick = () => { $('selT').value = i; toggleSim(); };
+    d.querySelector('.btn-waze').onclick = () => window.open('https://waze.com/ul?ll=' + t.A[0] + ',' + t.A[1] + '&navigate=yes', '_blank');
+    d.querySelector('.btn-del').onclick = () => { if (confirm('Excluir ' + t.n + '?')) { T.splice(i, 1); save(); drawT(); } };
     $('list').appendChild(d);
   });
-  $('selT').innerHTML = T.map((t, i) => `<option value="${i}">${t.n.replace(/</g, '&lt;')}</option>`).join('');
+  $('selT').innerHTML = T.map((t, i) => '<option value="' + i + '">' + t.n.replace(/</g, '&lt;') + '</option>').join('');
 }
 
 function setSt(s) { $('st').textContent = s; }
-function vib(p) { try { navigator.vibrate && navigator.vibrate(p); } catch(e){} }
+function vib(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) { } }
 
-// Processamento GPS
+// ======================================================================
+// GPS - PROCESSAMENTO
+// ======================================================================
 function onFix(pos, t, acc, v) {
-  if (acc > 45) return;
+  if (acc > 50) return;
   me = pos;
   meM.setLatLng(pos);
   if (!map.hasLayer(meM)) meM.addTo(map);
 
-  if (v != null && !isNaN(v) && v >= 0) {
-    spd = v;
-  } else if (lastFix) {
-    const dt = (t - lastFix.t) / 1000;
-    if (dt > 0) spd = hav(lastFix.p, pos) / dt;
-  }
-  lastFix = {p: pos, t};
-  const r = raio();
+  if (v != null && !isNaN(v) && v >= 0) spd = v;
+  else if (lastFix) { const dt = (t - lastFix.t) / 1000; if (dt > 0) spd = hav(lastFix.p, pos) / dt; }
+  lastFix = { p: pos, t: t };
+  const r = getRadio();
 
-  if (block >= 0 && hav(pos, T[block] ? T[block].B : pos) > r * 3) {
-    block = -1;
-  }
+  if (block >= 0 && (!T[block] || hav(pos, T[block].B) > r * 3)) block = -1;
 
-  // Alerta 500m antes do ponto A
+  // Alerta antecipado
   if (!run) {
     T.forEach((item, idx) => {
       if (idx !== block) {
-        const distA = hav(pos, item.A);
-        if (distA > r && distA <= 500 && (t - lastWarnedTime > 25000)) {
+        const d = hav(pos, item.A);
+        if (d > r && d <= 500 && (t - lastWarnedTime > 25000)) {
           lastWarnedTime = t;
           playBeep(660, 0.15, 2);
-          speak(`Atenção: radar de média a ${Math.round(distA)} metros. Limite ${item.lim} por hora.`);
+          speak('Radar de média a ' + Math.round(d) + ' metros. Limite ' + item.lim + '.');
         }
       }
     });
@@ -790,100 +564,60 @@ function onFix(pos, t, acc, v) {
   if (!run) {
     const i = T.findIndex((x, k) => k !== block && hav(pos, x.A) <= r);
     if (i >= 0) {
-      run = {i, t0: t, d: 0, last: pos, trail: [pos]};
-      result = null;
-      vib(200);
-      playBeep(980, 0.25, 2);
-      speak(`Entrou no trecho de média. Limite ${T[i].lim} por hora.`, true);
+      run = { i: i, t0: t, d: 0, last: pos, trail: [pos] };
+      result = null; vib(200); playBeep(980, 0.25, 2);
+      speak('Entrou no trecho de média. Limite ' + T[i].lim + '.', true);
     }
   } else {
     const st = hav(run.last, pos);
-    if (st >= 1) {
-      run.d += st;
-      run.last = pos;
-      run.trail.push(pos);
-    }
-    if (hav(pos, T[run.i].B) <= r) {
-      finish(t);
-    }
+    if (st >= 1) { run.d += st; run.last = pos; run.trail.push(pos); }
+    if (hav(pos, T[run.i].B) <= r) finishRun(t);
   }
 
   if (follow) {
-    if (wid != null && !tick++) map.setView(pos, 16);
-    else map.panTo(pos, {animate: true});
+    if (gpsWatchId != null && !tick++) map.setView(pos, 16);
+    else map.panTo(pos, { animate: true });
   }
   render(t);
-  updatePipCanvas();
+  updatePip();
 }
 
-function finish(t) {
-  const x = T[run.i];
-  const el = (t - run.t0) / 1000;
-  const d = x.off || run.d;
-  const v = (d / el) * 3.6;
-  result = {n: x.n, v, el: el * 1000, d, lim: x.lim, gps: !x.off};
-  block = run.i;
-  run = null;
-  vib([200, 100, 200]);
-
-  if (v > x.lim) {
-    playBeep(440, 0.3, 3);
-    speak(`Fim de trecho. Média ${Math.round(v)} por hora. Acima do limite de ${x.lim}!`, true);
-  } else {
-    playBeep(880, 0.2, 2);
-    speak(`Fim de trecho. Média ${Math.round(v)} por hora. Dentro do limite.`, true);
-  }
+function finishRun(t) {
+  const x = T[run.i], el = (t - run.t0) / 1000, d = x.off || run.d, v = (d / el) * 3.6;
+  result = { n: x.n, v: v, el: el * 1000, d: d, lim: x.lim, gps: !x.off };
+  block = run.i; run = null; vib([200, 100, 200]);
+  if (v > x.lim) { playBeep(440, 0.3, 3); speak('Fim de trecho. Média ' + Math.round(v) + '. Acima do limite!', true); }
+  else { playBeep(880, 0.2, 2); speak('Fim de trecho. Média ' + Math.round(v) + '. Dentro do limite.', true); }
 }
 
 function render(t) {
-  let avg = 0, el = 0, dist = 0, s = 'ok', lim = 60, rest = '—', radarTitle = 'Radar de Média';
-  const progBar = $('progBar');
-  const progFill = $('progFill');
+  let avg = 0, el = 0, dist = 0, s = '', lim = 60, rest = '—', title = 'RadarFlow';
 
   if (run) {
-    const x = T[run.i];
-    lim = x.lim;
-    el = t - run.t0;
-    dist = run.d;
+    const x = T[run.i]; lim = x.lim; el = t - run.t0; dist = run.d;
     avg = el > 1000 ? (dist / (el / 1000)) * 3.6 : 0;
     const totalDist = x.off || hav(x.A, x.B);
     const remTime = (totalDist / (lim / 3.6)) - (el / 1000);
     const remDist = Math.max(totalDist - run.d, 0);
-
-    radarTitle = x.n + ` (${lim} km/h)`;
-    rest = remTime <= 0 ? 'Já passou' : remDist <= 0 ? '—' : f1((remDist / remTime) * 3.6) + ' km/h';
-
-    const pct = Math.min(100, Math.max(0, (dist / totalDist) * 100));
-    progBar.style.display = 'block';
-    progFill.style.width = pct + '%';
-
-    if (avg > lim) {
-      s = 'bad';
-      setSt(`⚠️ Média atual (${f1(avg)} km/h) ACIMA do limite de ${lim} km/h!`);
-      if (t - lastWarnedTime > 16000 && el > 6000) {
-        lastWarnedTime = t;
-        playBeep(520, 0.18, 2);
-        speak(`Atenção: velocidade média acima do limite.`);
-      }
-    } else if (avg > lim * 0.93) {
-      s = 'warn';
-      setSt(`Média no limite (${f1(avg)} / ${lim} km/h). Atenção.`);
-    } else {
-      s = 'ok';
-      setSt(`${x.n}: Média dentro do limite de ${lim} km/h.`);
-    }
+    title = x.n + ' (' + lim + ' km/h)';
+    rest = remTime <= 0 ? 'Estourou' : remDist <= 0 ? '—' : f1((remDist / remTime) * 3.6) + ' km/h';
+    $('progBar').style.display = 'block';
+    $('progFill').style.width = Math.min(100, Math.max(0, (dist / totalDist) * 100)) + '%';
+    if (avg > lim) { s = 'bad'; setSt('⚠️ Média ' + f1(avg) + ' km/h ACIMA do limite!'); if (t - lastWarnedTime > 16000 && el > 6000) { lastWarnedTime = t; playBeep(520, 0.18, 2); speak('Velocidade média acima do limite.'); } }
+    else if (avg > lim * 0.93) { s = 'warn'; setSt('Média ' + f1(avg) + ' / ' + lim + ' km/h. Atenção.'); }
+    else { s = 'ok'; setSt(x.n + ': dentro do limite.'); }
   } else if (result) {
-    progBar.style.display = 'none';
+    $('progBar').style.display = 'none';
     avg = result.v; el = result.el; dist = result.d; lim = result.lim;
-    radarTitle = result.n + ' (Concluído)';
+    title = result.n + ' ✓';
     s = avg > lim ? 'bad' : 'ok';
-    setSt(`${result.n} concluído: ${f1(avg)} km/h. ${avg > lim ? '⚠️ Acima do limite' : '✅ Dentro do limite'} de ${lim} km/h.`);
+    setSt(result.n + ': ' + f1(avg) + ' km/h. ' + (avg > lim ? '⚠️ Acima' : '✅ Dentro') + ' do limite.');
   } else {
-    progBar.style.display = 'none';
-    setSt(adding ? `Toque no mapa para marcar o ponto ${adding.A ? 'B' : 'A'}.` : T.length ? 'Aguardando aproximação de radar.' : 'Cadastre radares.');
+    $('progBar').style.display = 'none';
+    setSt(adding ? 'Toque no mapa: ponto ' + (adding.A ? 'B' : 'A') : T.length ? 'Aguardando radar.' : 'Cadastre ou importe trechos.');
   }
 
-  $('radarName').textContent = radarTitle;
+  $('radarName').textContent = title;
   $('avg').textContent = f1(avg);
   $('now').textContent = f1(spd * 3.6);
   $('dist').textContent = Math.round(dist) + ' m';
@@ -893,182 +627,212 @@ function render(t) {
   trailL.setLatLngs(run ? run.trail : []);
 }
 
-// Picture-in-Picture Flutuante
+// ======================================================================
+// PIP
+// ======================================================================
 const pipCanvas = $('pipCanvas'), pipVideo = $('pipVideo'), pctx = pipCanvas.getContext('2d');
-function updatePipCanvas() {
+function updatePip() {
   if (document.pictureInPictureElement !== pipVideo && pipVideo.paused) return;
-  pctx.fillStyle = '#141b22';
-  pctx.fillRect(0, 0, 400, 240);
-
+  pctx.fillStyle = '#0e1318'; pctx.fillRect(0, 0, 400, 240);
   const s = $('hud').dataset.s;
   pctx.fillStyle = s === 'bad' ? '#ff4757' : s === 'warn' ? '#ffa502' : '#2ecc71';
-  pctx.fillRect(0, 0, 16, 240);
-
-  pctx.fillStyle = '#8c9ba8';
-  pctx.font = '16px sans-serif';
-  pctx.fillText($('radarName').textContent.substring(0, 32), 30, 34);
-
-  pctx.fillText('MÉDIA NO TRECHO', 30, 80);
-  pctx.fillStyle = s === 'bad' ? '#ff4757' : '#ffffff';
-  pctx.font = 'bold 54px sans-serif';
-  pctx.fillText($('avg').textContent + ' km/h', 30, 135);
-
-  pctx.fillStyle = '#8c9ba8';
-  pctx.font = '16px sans-serif';
-  pctx.fillText('AGORA: ' + $('now').textContent + ' km/h', 30, 185);
-  pctx.fillText('MÁX. RESTANTE: ' + $('rest').textContent, 30, 215);
+  pctx.fillRect(0, 0, 14, 240);
+  pctx.fillStyle = '#8c9ba8'; pctx.font = '15px sans-serif';
+  pctx.fillText($('radarName').textContent.substring(0, 32), 28, 32);
+  pctx.fillText('MÉDIA NO TRECHO', 28, 76);
+  pctx.fillStyle = s === 'bad' ? '#ff4757' : '#fff';
+  pctx.font = 'bold 52px sans-serif';
+  pctx.fillText($('avg').textContent + ' km/h', 28, 130);
+  pctx.fillStyle = '#8c9ba8'; pctx.font = '15px sans-serif';
+  pctx.fillText('AGORA: ' + $('now').textContent + ' km/h', 28, 180);
+  pctx.fillText('MÁX: ' + $('rest').textContent, 28, 210);
 }
 
 $('btnPip').onclick = async () => {
   try {
-    if (document.pictureInPictureElement) {
-      await document.exitPictureInPicture();
-      $('btnPip').classList.remove('active');
-      return;
-    }
-    updatePipCanvas();
-    if (!pipVideo.srcObject) {
-      pipVideo.srcObject = pipCanvas.captureStream(10);
-      await pipVideo.play();
-    }
+    if (document.pictureInPictureElement) { await document.exitPictureInPicture(); $('btnPip').classList.remove('active'); return; }
+    updatePip();
+    if (!pipVideo.srcObject) { pipVideo.srcObject = pipCanvas.captureStream(10); await pipVideo.play(); }
     await pipVideo.requestPictureInPicture();
     $('btnPip').classList.add('active');
-  } catch(e) {
-    alert('Picture-in-Picture não suportado neste navegador.');
-  }
+  } catch (e) { alert('PiP não suportado neste navegador.'); }
 };
 
-// Adicionar Trecho Manual
+// ======================================================================
+// TRECHO MANUAL NO MAPA
+// ======================================================================
 map.on('click', e => {
   if (!adding) return;
   const p = [e.latlng.lat, e.latlng.lng];
-  if (!adding.A) {
-    adding.A = p;
-    setSt('Ponto A definido. Toque no mapa para marcar o ponto B final.');
-  } else {
-    T.push({n: 'Trecho ' + (T.length + 1), A: adding.A, B: p, lim: 60, off: 0});
-    adding = null;
-    save(); drawT();
-    setSt('Novo trecho cadastrado!');
-  }
+  if (!adding.A) { adding.A = p; setSt('Ponto A marcado. Toque no ponto B.'); }
+  else { T.push({ n: 'Trecho ' + (T.length + 1), A: adding.A, B: p, lim: 60, off: 0 }); adding = null; save(); drawT(); setSt('Trecho salvo com sucesso!'); }
   render(0);
 });
 
-$('addNewSectionMap').onclick = () => {
-  adding = {};
-  switchTab(null);
-  setSt('Toque no mapa para marcar o Ponto A (início do radar).');
-};
+$('addNewSectionMap').onclick = () => { adding = {}; switchTab(null); setSt('Toque no mapa para marcar o ponto A.'); };
+$('seg').onclick = () => { follow = !follow; if (follow && me) map.panTo(me); };
 
-$('seg').onclick = () => {
-  follow = !follow;
-  $('seg').style.background = follow ? 'var(--blue)' : 'var(--card-sub)';
-  if (follow && me) map.panTo(me);
-};
-
-// GPS
-function stopSim() { if (sim) { clearInterval(sim); sim = null; } $('sim').textContent = '▶️ Testar Simulação'; }
-function stopGps() { if (wid != null) { navigator.geolocation.clearWatch(wid); wid = null; } $('gps').textContent = 'Ligar GPS'; $('gps').style.background = '#1b7a4b'; }
+// ======================================================================
+// GPS - LIGAR / DESLIGAR
+// ======================================================================
+function stopGps() {
+  if (gpsWatchId != null) {
+    navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId = null;
+  }
+  $('gps').textContent = '▶ Ligar GPS';
+  $('gps').style.background = '#1b7a4b';
+}
 
 function startGps() {
-  if (wid != null) return;
-  requestWakeLock();
-  stopSim(); run = null; result = null; tick = 0;
-  wid = navigator.geolocation.watchPosition(
+  if (gpsWatchId != null) return;
+  if (!('geolocation' in navigator)) { setSt('GPS não disponível neste dispositivo.'); return; }
+  requestWakeLock(); stopSim(); tick = 0;
+  gpsWatchId = navigator.geolocation.watchPosition(
     p => {
       const pos = [p.coords.latitude, p.coords.longitude];
       if (!originCoords) {
         originCoords = pos;
-        $('addrOrigin').value = '📍 Minha Localização Atual';
+        $('addrOrigin').value = '📍 Minha Localização';
+        $('gpsStatus').textContent = '● Ativo';
+        $('gpsStatus').style.color = 'var(--ok)';
       }
       onFix(pos, p.timestamp, p.coords.accuracy, p.coords.speed);
     },
-    e => setSt('Erro de GPS: ' + (e.message || 'Verifique as permissões.')),
-    {enableHighAccuracy: true, maximumAge: 0}
+    e => {
+      if (e.code === 1) setSt('Permissão de localização negada.');
+      else if (e.code === 2) setSt('Sem sinal GPS. Vá para local aberto.');
+      else setSt('GPS expirou. Tente novamente.');
+    },
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
   );
-  $('gps').textContent = 'Desligar GPS';
-  $('gps').style.background = 'var(--bad)';
+  $('gps').textContent = '⏹ Desligar GPS'; $('gps').style.background = 'var(--bad)';
 }
 
-$('gps').onclick = () => {
-  if (wid != null) { stopGps(); return; }
-  startGps();
-  switchTab(null);
-};
+$('gps').onclick = () => { if (gpsWatchId != null) { stopGps(); return; } startGps(); switchTab(null); };
 
-// Detecção Automática de Localização ao Abrir o App
-function initAutoLocation() {
-  if ('geolocation' in navigator) {
-    navigator.geolocation.getCurrentPosition(
-      p => {
-        const pos = [p.coords.latitude, p.coords.longitude];
-        me = pos;
-        if (!originCoords) originCoords = pos;
-        $('addrOrigin').value = '📍 Minha Localização Atual';
-        meM.setLatLng(pos);
-        if (!map.hasLayer(meM)) meM.addTo(map);
-        map.setView(pos, 15);
-        setSt('Localização detectada. Digite o destino e selecione Waze ou Maps.');
-      },
-      err => {},
-      {enableHighAccuracy: true, timeout: 8000, maximumAge: 30000}
-    );
+// Pegar localização inicial ao abrir
+if ('geolocation' in navigator) {
+  navigator.geolocation.getCurrentPosition(p => {
+    const pos = [p.coords.latitude, p.coords.longitude];
+    me = pos; originCoords = pos;
+    $('addrOrigin').value = '📍 Minha Localização';
+    $('gpsStatus').textContent = '● Detectado'; $('gpsStatus').style.color = 'var(--ok)';
+    meM.setLatLng(pos); if (!map.hasLayer(meM)) meM.addTo(map);
+    map.setView(pos, 14);
+    setSt('Localização detectada. Abra Trajeto para definir destino.');
+  }, () => {
+    setSt('RadarFlow pronto! Toque em ▶ Simular para testar.');
+  }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 });
+}
+
+// ======================================================================
+// SIMULAÇÃO
+// ======================================================================
+function stopSim() {
+  if (simTimer) {
+    clearInterval(simTimer);
+    simTimer = null;
   }
+  $('sim').textContent = '▶️ Iniciar Simulação do Trecho';
+  $('btnSimQuick').textContent = '▶ Simular';
+  $('btnSimQuick').style.background = 'var(--blue)';
+  $('btnSimQuick').style.borderColor = 'var(--blue)';
 }
-initAutoLocation();
 
-$('sim').onclick = () => {
-  if (sim) { stopSim(); return; }
-  const x = T[+$('selT').value];
-  if (!x) return alert('Selecione um trecho.');
+function toggleSim() {
+  if (simTimer) {
+    stopSim();
+    setSt('Simulação encerrada.');
+    return;
+  }
+  const selIdx = +$('selT').value || 0;
+  const x = T[selIdx] || T[0];
+  if (!x) return alert('Selecione ou cadastre um trecho para simular.');
 
   stopGps(); run = null; result = null; block = -1; follow = true;
   const tot = hav(x.A, x.B), lead = 250, k = 4, base = +$('simv').value || 85;
   let s = -lead, t = 0; const t0 = Date.now();
 
-  map.fitBounds([x.A, x.B], {padding: [70, 70]});
-  $('sim').textContent = '⏹️ Parar Simulação';
+  map.fitBounds([x.A, x.B], { padding: [70, 70] });
+  $('sim').textContent = '⏹ Parar Simulação';
+  $('btnSimQuick').textContent = '⏹ Parar';
+  $('btnSimQuick').style.background = 'var(--bad)';
+  $('btnSimQuick').style.borderColor = 'var(--bad)';
   switchTab(null);
-  speak(`Iniciando simulação.`);
+  speak('Simulação iniciada. Acompanhe a velocidade média.');
 
-  sim = setInterval(() => {
+  simTimer = setInterval(() => {
     t += 200 * k;
     const v = (base + 12 * Math.sin(t / 4000)) / 3.6;
     s += v * 0.2 * k;
     const f = s / tot;
     onFix([x.A[0] + (x.B[0] - x.A[0]) * f, x.A[1] + (x.B[1] - x.A[1]) * f], t0 + t, 5, v);
-    if (s > tot + lead) stopSim();
+    if (s > tot + lead) {
+      stopSim();
+      setSt('Simulação concluída!');
+    }
   }, 200);
-};
+}
 
+$('sim').onclick = toggleSim;
+$('btnSimQuick').onclick = toggleSim;
+
+// ======================================================================
+// EXPORTAR / IMPORTAR / LIMPAR
+// ======================================================================
 $('btnExport').onclick = async () => {
   const txt = T.map(t => [t.n, t.A.map(v => v.toFixed(5)).join(', '), t.B.map(v => v.toFixed(5)).join(', '), t.lim, t.off || ''].join('; ')).join('\n');
-  try {
-    await navigator.clipboard.writeText(txt);
-    alert('Lista de trechos copiada com sucesso!');
-  } catch(e) { prompt('Copie os dados:', txt); }
+  try { await navigator.clipboard.writeText(txt); alert('Lista copiada!'); } catch (e) { prompt('Copie:', txt); }
 };
 
 $('doImp').onclick = () => {
   let n = 0;
   $('imp').value.split('\n').forEach(l => {
-    const p = l.split(';').map(s => s.trim());
-    if (p.length < 3) return;
-    const ll = s => {
-      const m = s.match(/-?\d+(?:[.,]\d+)?/g);
-      return m && m.length >= 2 ? [parseFloat(m[0].replace(',', '.')), parseFloat(m[1].replace(',', '.'))] : null;
-    };
-    const A = ll(p[1]), B = ll(p[2]);
-    if (!A || !B) return;
-    T.push({n: p[0] || 'Trecho ' + (T.length + 1), A, B, lim: +p[3] || 60, off: +p[4] || 0});
-    n++;
+    const p = l.split(';').map(s => s.trim()); if (p.length < 3) return;
+    const ll = s => { const m = s.match(/-?\d+(?:[.,]\d+)?/g); return m && m.length >= 2 ? [parseFloat(m[0].replace(',', '.')), parseFloat(m[1].replace(',', '.'))] : null; };
+    const A = ll(p[1]), B = ll(p[2]); if (!A || !B) return;
+    T.push({ n: p[0] || 'Trecho ' + (T.length + 1), A: A, B: B, lim: +p[3] || 60, off: +p[4] || 0 }); n++;
   });
   save(); drawT(); $('imp').value = '';
-  alert(`${n} trecho(s) importado(s)!`);
+  alert(n + ' trecho(s) importado(s)!');
+  if (T.length) map.fitBounds(T.flatMap(t => [t.A, t.B]), { padding: [70, 70] });
 };
 
+$('clrAll').onclick = () => { if (confirm('Apagar todos os trechos?')) { T = []; run = null; result = null; save(); drawT(); render(0); } };
+$('raio').oninput = drawT;
+
+// ======================================================================
+// INSTALAÇÃO PWA
+// ======================================================================
+let deferredPrompt = null;
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+if (isStandalone) $('btnInstall').style.display = 'none';
+
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; });
+
+$('btnInstall').onclick = async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') $('btnInstall').style.display = 'none';
+    deferredPrompt = null;
+  } else {
+    const isIos = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+    $('installModalContent').innerHTML = isIos
+      ? '<b>iPhone (Safari):</b><br><br>1. Toque no botão <b>Compartilhar</b> (quadrado com seta ⎋).<br><br>2. Selecione <b>"Adicionar à Tela de Início"</b>.<br><br>3. Toque em <b>Adicionar</b>.'
+      : '<b>Android / Chrome:</b><br><br>1. Toque nos <b>3 pontinhos ⋮</b> no topo direito.<br><br>2. Selecione <b>"Instalar aplicativo"</b> ou <b>"Adicionar à tela inicial"</b>.<br><br>3. Confirme a instalação.';
+    $('installModal').style.display = 'flex';
+  }
+};
+
+window.addEventListener('appinstalled', () => { $('btnInstall').style.display = 'none'; });
+
+// ======================================================================
+// INICIALIZAÇÃO
+// ======================================================================
 drawT();
-if (T.length) map.fitBounds(T.flatMap(t => [t.A, t.B]), {padding: [70, 70]});
+if (T.length) map.fitBounds(T.flatMap(t => [t.A, t.B]), { padding: [70, 70] });
 render(0);
 </script>
 </body>
