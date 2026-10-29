@@ -1,18 +1,21 @@
 {
-  "name": "radarflow",
-  "version": "1.1.0",
-  "private": true,
-  "description": "RadarFlow: Copiloto em tempo real para monitoramento de radares de velocidade média com overlay para Waze e Google Maps.",
+  "name": "radarpilot",
+  "version": "2.0.0",
+  "description": "RadarPilot - Alertas de radar e velocidade média no Brasil",
   "scripts": {
-    "local": "node server.js"
+    "local": "node server.js",
+    "build-radars": "node build-radars.js"
   },
   "keywords": [
+    "pwa",
+    "radarpilot",
     "radar",
     "velocidade-media",
     "waze",
     "google-maps",
-    "gps",
-    "pwa"
+    "brasil",
+    "dnit",
+    "antt"
   ],
   "author": "Fernando Carmo",
   "license": "MIT"

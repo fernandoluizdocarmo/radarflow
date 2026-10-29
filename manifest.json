@@ -1,7 +1,7 @@
 {
-  "name": "RadarFlow - Velocidade Média",
-  "short_name": "RadarFlow",
-  "description": "Copiloto inteligente para monitoramento em tempo real de velocidade média com overlay para Waze e Google Maps.",
+  "name": "RadarPilot - Alertas & Velocidade Média",
+  "short_name": "RadarPilot",
+  "description": "Copiloto inteligente de radares fixos, semáforos e velocidade média no Brasil com integração ao Waze e Google Maps.",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

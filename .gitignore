@@ -3,3 +3,7 @@ node_modules
 .DS_Store
 Thumbs.db
 *.log
+pardal_radares.csv
+osm_radars_raw.json
+pardal_catalogo.json
+fetch-radars.js

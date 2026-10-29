@@ -1,8 +1,9 @@
-const CACHE_NAME = 'radarflow-v4';
+const CACHE_NAME = 'radarpilot-v5';
 const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './radars.json',
   './icon.svg',
   './icon-192.png',
   './icon-512.png'
@@ -53,7 +54,7 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Para assets estáticos: Network-first com fallback para Cache, garantindo versão mais recente
+  // Para assets estáticos e base de dados: Network-first com fallback para Cache
   e.respondWith(
     fetch(e.request).then(response => {
       if (response && response.status === 200) {
