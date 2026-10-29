@@ -1,4 +1,4 @@
-const CACHE_NAME = 'radarpilot-v5';
+const CACHE_NAME = 'radarpilot-v6';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -9,9 +9,11 @@ const STATIC_ASSETS = [
   './icon-512.png'
 ];
 
-// URLs que NUNCA devem ser salvas em cache local (APIs externas, tiles, busca, rotas)
+// URLs que NUNCA devem ser salvas em cache local (APIs externas, geocoding, rotas, mapas)
 function shouldBypassCache(url) {
   return url.includes('nominatim.openstreetmap.org') ||
+         url.includes('photon.komoot.io') ||
+         url.includes('brasilapi.com.br') ||
          url.includes('router.project-osrm.org') ||
          url.includes('tile.openstreetmap.org') ||
          url.includes('waze.com') ||
@@ -42,7 +44,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = e.request.url;
 
-  // Requisições para APIs externas, mapas ou navegação: SEMPRE ir para a rede
+  // Requisições para APIs externas, geocoders ou mapas: SEMPRE ir para a rede
   if (shouldBypassCache(url)) {
     e.respondWith(fetch(e.request).catch(err => {
       console.warn('Erro ao buscar recurso externo:', url, err);

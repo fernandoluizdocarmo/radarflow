@@ -406,16 +406,80 @@ function switchTab(tabId) {
 }
 
 // ======================================================================
-// BUSCA DE ENDEREÇO & ROTA
+// BUSCA DE ENDEREÇO HÍBRIDA (BrasilAPI + Photon Komoot + Nominatim)
 // ======================================================================
 let searchTimer = null;
 async function searchAddress(query) {
-  if (!query || query.length < 3) return [];
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const results = [];
+  const seen = new Set();
+
+  // 1. Busca por CEP (8 dígitos, com ou sem traço)
+  const cleanCep = q.replace(/\D/g, '');
+  if (cleanCep.length === 8) {
+    try {
+      const res = await fetch('https://brasilapi.com.br/api/cep/v2/' + cleanCep);
+      if (res.ok) {
+        const d = await res.json();
+        if (d.location && d.location.coordinates) {
+          const lat = parseFloat(d.location.coordinates.latitude);
+          const lon = parseFloat(d.location.coordinates.longitude);
+          const name = [d.street, d.neighborhood, d.city + ' - ' + d.state].filter(Boolean).join(', ') + ' (' + d.cep + ')';
+          results.push({ name, lat, lon });
+          seen.add(lat.toFixed(3) + ',' + lon.toFixed(3));
+        }
+      }
+    } catch(e) {}
+  }
+
+  // 2. Geocodificador Rápido Photon (Komoot / OpenStreetMap)
   try {
-    const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&countrycodes=br&limit=5');
-    if (!res.ok) return [];
-    return await res.json();
-  } catch (e) { return []; }
+    const res = await fetch('https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&limit=6');
+    if (res.ok) {
+      const j = await res.json();
+      (j.features || []).forEach(f => {
+        const p = f.properties || {};
+        const coords = f.geometry && f.geometry.coordinates;
+        if (!coords) return;
+        const lon = coords[0], lat = coords[1];
+        const key = lat.toFixed(3) + ',' + lon.toFixed(3);
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        const streetOrName = p.housenumber ? ((p.street || p.name || '') + ', ' + p.housenumber) : (p.name || p.street || '');
+        const parts = [
+          streetOrName,
+          p.district || p.suburb || p.locality,
+          p.city ? (p.city + (p.state ? ' - ' + p.state : '')) : p.state
+        ].filter(Boolean);
+        const name = parts.join(', ') || q;
+        results.push({ name, lat, lon });
+      });
+    }
+  } catch(e) {}
+
+  // 3. Fallback Nominatim (com ou sem número)
+  if (results.length < 4) {
+    try {
+      const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(q) + '&countrycodes=br&limit=4', {
+        headers: { 'Accept-Language': 'pt-BR,pt;q=0.9', 'User-Agent': 'RadarPilot-App/2.0' }
+      });
+      if (res.ok) {
+        const list = await res.json();
+        (list || []).forEach(item => {
+          const lat = parseFloat(item.lat), lon = parseFloat(item.lon);
+          const key = lat.toFixed(3) + ',' + lon.toFixed(3);
+          if (seen.has(key)) return;
+          seen.add(key);
+          const name = item.display_name.split(',').slice(0, 4).join(',').trim();
+          results.push({ name, lat, lon });
+        });
+      }
+    } catch(e) {}
+  }
+
+  return results;
 }
 
 async function doDestSearch() {
@@ -425,14 +489,17 @@ async function doDestSearch() {
   box.innerHTML = '<div class="sugg-item" style="color:var(--mut)">🔍 Buscando endereços…</div>';
   box.style.display = 'block';
   const results = await searchAddress(q);
-  if (!results.length) { box.innerHTML = '<div class="sugg-item" style="color:var(--mut)">Nenhum resultado encontrado</div>'; return; }
+  if (!results.length) {
+    box.innerHTML = '<div class="sugg-item" style="color:var(--mut)">Não listado no mapa.<br><small style="color:var(--ink)">💡 Toque direto em <b>🚙 Waze</b> ou <b>🗺️ Google Maps</b> para navegar!</small></div>';
+    return;
+  }
   box.innerHTML = '';
   results.forEach(r => {
     const el = document.createElement('div');
     el.className = 'sugg-item';
-    el.textContent = r.display_name;
+    el.textContent = r.name;
     el.onclick = () => {
-      $('addrDest').value = r.display_name.split(',').slice(0, 3).join(',').trim();
+      $('addrDest').value = r.name;
       destCoords = [parseFloat(r.lat), parseFloat(r.lon)];
       box.style.display = 'none';
     };
@@ -452,7 +519,18 @@ $('btnResetOrigin').onclick = () => { if (me) { originCoords = me; $('addrOrigin
 
 $('btnCalculateRoute').onclick = async () => {
   if (!originCoords) originCoords = me || [-23.55, -46.63];
-  if (!destCoords) { alert('Digite ou selecione um destino.'); return; }
+  if (!destCoords) {
+    const q = $('addrDest').value.trim();
+    if (q) {
+      $('btnCalculateRoute').textContent = 'Buscando destino…';
+      const results = await searchAddress(q);
+      if (results && results.length > 0) {
+        destCoords = [results[0].lat, results[0].lon];
+        $('addrDest').value = results[0].name;
+      }
+    }
+  }
+  if (!destCoords) { alert('Digite um destino para traçar a rota.'); return; }
   $('btnCalculateRoute').textContent = 'Calculando rota…';
   try {
     const url = 'https://router.project-osrm.org/route/v1/driving/' + originCoords[1] + ',' + originCoords[0] + ';' + destCoords[1] + ',' + destCoords[0] + '?overview=full&geometries=geojson';
